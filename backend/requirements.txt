@@ -1,0 +1,15 @@
+# Phase 1 (foundation): FastAPI app, async ORM, migrations, background job runner.
+# Phase-specific deps (auth, storage, files, search, notifications — architecture.md
+# §10) get added here as each phase lands, so this file reflects what's actually built.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+redis==5.2.1
+celery==5.4.0
