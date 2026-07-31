@@ -11,7 +11,7 @@ VENV := $(BACKEND_DIR)/.venv
 .PHONY: help \
 	env \
 	up down restart logs ps rebuild \
-	venv backend-dev migrate migration db-shell \
+	venv backend-dev migrate migration db-shell test \
 	mobile-install mobile mobile-web mobile-android mobile-ios typecheck \
 	clean-ports clean
 
@@ -68,6 +68,11 @@ migration: venv ## Autogenerate a new migration: make migration m="add users tab
 
 db-shell: ## Open a psql shell against the running db container
 	docker-compose exec db psql -U $${POSTGRES_USER:-company_chat} -d $${POSTGRES_DB:-company_chat}
+
+test: venv ## Run the backend test suite (needs a real Postgres — creates a *_test db on the `db` container)
+	$(VENV)/bin/pip install --quiet -r $(BACKEND_DIR)/requirements-dev.txt
+	docker-compose up -d db
+	cd $(BACKEND_DIR) && source .venv/bin/activate && pytest
 
 ## --- Mobile (Expo) ---
 

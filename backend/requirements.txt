@@ -13,3 +13,10 @@ alembic==1.14.0
 
 redis==5.2.1
 celery==5.4.0
+
+# Phase 3 (auth): argon2 password hashing, JWT issue/verify (architecture.md §10
+# names "python-jose or pyjwt" — picked pyjwt, actively maintained, no known CVEs).
+# email-validator backs pydantic's EmailStr for the register/login request schemas.
+argon2-cffi==23.1.0
+pyjwt==2.10.1
+email-validator==2.2.0

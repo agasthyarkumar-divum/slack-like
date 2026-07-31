@@ -69,6 +69,18 @@ populated from environment variables. Root `.env` feeds the Docker stack;
 `backend/.env` feeds host-mode `uvicorn`. Neither is committed — copy from
 the matching `.env.example`.
 
+**Tests** (needs real Postgres — the schema uses UUID/JSONB/TSVECTOR, so SQLite
+won't work):
+
+```bash
+make test
+```
+
+Creates `company_chat_test` on the `db` container the first time it runs, then
+applies `Base.metadata.create_all` (not the Alembic migrations — tests only
+exercise auth so far, which doesn't need the FTS triggers or `audit_logs`
+partitioning that live in the migration). Tables are truncated before every test.
+
 ## Mobile
 
 Mobile commands must run **from `mobile/`** (or via the `make mobile*`

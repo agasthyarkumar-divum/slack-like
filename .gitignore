@@ -1,6 +1,7 @@
 # Env files with real secrets
 .env
 backend/.env
+mobile/.env
 
 # Python
 .venv/
