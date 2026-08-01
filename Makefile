@@ -11,7 +11,7 @@ VENV := $(BACKEND_DIR)/.venv
 .PHONY: help \
 	env \
 	up down restart logs ps rebuild \
-	venv backend-dev migrate migration db-shell test \
+	venv backend-dev migrate migration db-shell test seed \
 	mobile-install mobile mobile-web mobile-android mobile-ios typecheck \
 	clean-ports clean
 
@@ -73,6 +73,11 @@ test: venv ## Run the backend test suite (needs a real Postgres — creates a *_
 	$(VENV)/bin/pip install --quiet -r $(BACKEND_DIR)/requirements-dev.txt
 	docker-compose up -d db
 	cd $(BACKEND_DIR) && source .venv/bin/activate && pytest
+
+seed: venv ## Seed N dev users (same password) + a shared channel: make seed [n=5] [password=...]
+	$(VENV)/bin/pip install --quiet httpx
+	cd $(BACKEND_DIR) && source .venv/bin/activate && python scripts/seed_dev_users.py \
+		--count $(or $(n),5) --password $(or $(password),chatchatchat)
 
 ## --- Mobile (Expo) ---
 

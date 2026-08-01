@@ -33,6 +33,7 @@ for a liveness check). `make help` lists every target with its description.
 | `make migrate` / `make migration m="..."` | Alembic — apply migrations / autogenerate a new one |
 | `make mobile` / `make mobile-web` / `make mobile-android` / `make mobile-ios` | Start the Expo dev server (default / web / Android / iOS) — always `cd`s into `mobile/` for you, so wrong-directory mistakes can't happen via `make` |
 | `make test` | Run the backend test suite against a real Postgres (`company_chat_test`, auto-created on the `db` container) |
+| `make seed` | Create a few dev accounts (same password) + a shared channel, so you can log in as different people and chat with yourself — `make seed n=8 password=...` to customize |
 | `make clean-ports` | Kills anything stray on Expo's ports (8081/8082/19000-19002) without touching Docker's ports |
 
 Full walkthrough, troubleshooting, and the ground rules that keep backend/mobile
@@ -45,7 +46,11 @@ values.
 
 ## Status
 
-Following the phased build order in the project brief — see commit history and
-`docs/architecture.md` §13 for the roadmap. Currently: auth (Phase 3) — register,
-login, refresh (with rotation + reuse detection), logout, `GET /users/me`, and
-the mobile login screen wired end-to-end.
+All 10 phases of the build order are done: auth, storage abstraction, channels
+& messages, the WebSocket layer, files pipeline, search, notifications, and
+the full mobile UI — all wired end-to-end and tested. Two things intentionally
+not built (out of scope for the phases run so far, not forgotten):
+password-reset endpoints (no email pipeline exists yet) and the Admin
+Dashboard's backend (`GET /admin/users` etc. — the screen says so honestly
+rather than showing fake data). See `docs/architecture.md` §13 for the
+original roadmap this followed.

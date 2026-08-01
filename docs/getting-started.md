@@ -81,6 +81,33 @@ applies `Base.metadata.create_all` (not the Alembic migrations — tests only
 exercise auth so far, which doesn't need the FTS triggers or `audit_logs`
 partitioning that live in the migration). Tables are truncated before every test.
 
+## Chatting with yourself (multiple accounts, same password)
+
+```bash
+make seed                                    # 5 users, shared #general channel
+make seed n=8 password=mypassword123          # customize count / password
+```
+
+Creates `alice@example.com` … `erin@example.com` (all with the same password,
+`chatchatchat` by default) plus a `#general` channel with all of them as
+members — so you can log in as different people and actually see messages
+arrive live. Safe to re-run (skips users/memberships that already exist).
+See `python scripts/seed_dev_users.py --help` (from `backend/`) for more options.
+
+**Same system**: open the web preview (`make mobile-web`) in a few different
+browser tabs/windows (or one normal + one incognito, since tabs share
+`localStorage` and would log each other out) and log in as a different seeded
+user in each.
+
+**Same network / another device**: that device needs to reach the API at
+whatever `EXPO_PUBLIC_API_URL` in `mobile/.env` points to.
+- Plain LAN: set it to your machine's LAN IP (`http://192.168.x.x:8000`) —
+  `expo start` prints this IP for you.
+- Codespaces/tunnel: use the forwarded URL for port 8000, and make sure that
+  port's visibility is **Public** (or the other device authenticates via
+  GitHub) — a Private port redirects API calls to a sign-in page instead of
+  JSON, which looks like a broken app, not an auth prompt.
+
 ## Mobile
 
 Mobile commands must run **from `mobile/`** (or via the `make mobile*`
