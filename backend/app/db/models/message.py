@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from sqlalchemy.sql import func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.db.mixins import UUIDPKMixin
@@ -34,12 +34,29 @@ class Message(UUIDPKMixin, Base):
     # Populated by trg_messages_search (BEFORE INSERT/UPDATE, see the migration).
     search_vector: Mapped[str | None] = mapped_column(TSVECTOR)
 
+    # Default (lazy="select") strategy — async SQLAlchemy runs an implicit
+    # lazy-load via a greenlet bridge if this is ever accessed unloaded, so it
+    # degrades to an extra query rather than crashing. list/get repository
+    # functions eager-load it via selectinload() for the hot paths regardless.
+    attachments: Mapped[list["Attachment"]] = relationship(foreign_keys="Attachment.message_id")
+
 
 class Attachment(UUIDPKMixin, Base):
+    """architecture.md §5 doesn't include an `uploaded_by` column, but §8's flow
+    uploads a file (and returns its id) *before* it's attached to a message —
+    without recording who uploaded it, there'd be no way to enforce that only
+    the uploader can access a not-yet-attached attachment (message_id NULL), so
+    any authenticated user could download any pending upload by guessing its
+    UUID. Added here, matching the sender_id/created_by pattern used elsewhere.
+    """
+
     __tablename__ = "attachments"
 
     message_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE")
+    )
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id")
     )
     storage_uri: Mapped[str] = mapped_column(Text, nullable=False)
     thumbnail_uri: Mapped[str | None] = mapped_column(Text)

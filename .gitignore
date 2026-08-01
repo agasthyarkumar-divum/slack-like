@@ -10,6 +10,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# Local file storage (LocalFileSystemBackend target when run outside Docker)
+backend/uploads/
+
 # Node / Expo
 mobile/node_modules/
 mobile/.expo/

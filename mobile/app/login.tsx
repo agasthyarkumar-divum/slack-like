@@ -1,9 +1,15 @@
+import axios from "axios";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
+import { Button } from "@/components/Button";
+import { TextField } from "@/components/TextField";
+import { API_BASE_URL } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { useTheme } from "@/lib/theme/ThemeContext";
+import { fonts, spacing } from "@/lib/theme/tokens";
 
 type LoginFormValues = {
   email: string;
@@ -12,6 +18,7 @@ type LoginFormValues = {
 
 export default function LoginScreen() {
   const { login } = useAuth();
+  const { colors } = useTheme();
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const {
@@ -25,75 +32,85 @@ export default function LoginScreen() {
     try {
       await login(values.email, values.password);
       router.replace("/");
-    } catch {
-      setServerError("Incorrect email or password.");
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401) {
+          setServerError("Incorrect email or password.");
+        } else if (!error.response) {
+          setServerError(`Can't reach the server at ${API_BASE_URL}. Check EXPO_PUBLIC_API_URL in mobile/.env.`);
+        } else {
+          setServerError(`Login failed (${error.response.status}). Try again.`);
+        }
+      } else {
+        setServerError("Something went wrong. Try again.");
+      }
     }
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Divum Chat</Text>
+    <View style={[styles.container, { backgroundColor: colors.bgBase }]}>
+      <View style={styles.card}>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Divum Chat</Text>
+        <Text style={[styles.tagline, { color: colors.textSecondary }]}>Sign in to keep talking.</Text>
 
-      <Controller
-        control={control}
-        name="email"
-        rules={{ required: "Email is required" }}
-        render={({ field: { onChange, onBlur, value } }) => (
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
+        <View style={styles.form}>
+          <Controller
+            control={control}
+            name="email"
+            rules={{ required: "Email is required" }}
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextField
+                label="Email"
+                placeholder="you@company.com"
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                error={errors.email?.message}
+              />
+            )}
           />
-        )}
-      />
-      {errors.email ? <Text style={styles.error}>{errors.email.message}</Text> : null}
 
-      <Controller
-        control={control}
-        name="password"
-        rules={{ required: "Password is required" }}
-        render={({ field: { onChange, onBlur, value } }) => (
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            secureTextEntry
-            autoComplete="password"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
+          <Controller
+            control={control}
+            name="password"
+            rules={{ required: "Password is required" }}
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextField
+                label="Password"
+                placeholder="••••••••"
+                secureTextEntry
+                autoComplete="password"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                error={errors.password?.message}
+              />
+            )}
           />
-        )}
-      />
-      {errors.password ? <Text style={styles.error}>{errors.password.message}</Text> : null}
 
-      {serverError ? <Text style={styles.error}>{serverError}</Text> : null}
+          {serverError ? (
+            <Text style={[styles.serverError, { color: colors.stateError }]}>{serverError}</Text>
+          ) : null}
 
-      <Pressable
-        style={[styles.button, isSubmitting && styles.buttonDisabled]}
-        onPress={handleSubmit(onSubmit)}
-        disabled={isSubmitting}
-      >
-        {isSubmitting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Log in</Text>
-        )}
-      </Pressable>
+          {isSubmitting ? (
+            <ActivityIndicator color={colors.accentMoss} />
+          ) : (
+            <Button label="Log in" onPress={handleSubmit(onSubmit)} disabled={isSubmitting} />
+          )}
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
-  title: { fontSize: 24, fontWeight: "700", textAlign: "center", marginBottom: 24 },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 12, fontSize: 16 },
-  error: { color: "#a6503b", fontSize: 13 },
-  button: { backgroundColor: "#5f7052", borderRadius: 8, padding: 14, alignItems: "center", marginTop: 8 },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  container: { flex: 1, justifyContent: "center", alignItems: "center", padding: spacing.xl },
+  card: { width: "100%", maxWidth: 380, gap: spacing.xs },
+  title: { fontFamily: fonts.display, fontSize: 32, textAlign: "center" },
+  tagline: { fontFamily: fonts.body, fontSize: 14, textAlign: "center", marginBottom: spacing.xl },
+  form: { gap: spacing.lg },
+  serverError: { fontFamily: fonts.body, fontSize: 13, textAlign: "center" },
 });

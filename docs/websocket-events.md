@@ -53,7 +53,8 @@ All events on the wire share this envelope:
     "forwarded_from_id": null,
     "is_pinned": false,
     "is_edited": false,
-    "created_at": "2026-07-31T09:12:03.512Z"
+    "created_at": "2026-07-31T09:12:03.512Z",
+    "attachment_ids": []
   }
 }
 ```

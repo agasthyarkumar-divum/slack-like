@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     LOCAL_STORAGE_PATH: str = "/srv/company-chat/uploads"
     FILE_ENCRYPTION_KEY: str = ""  # Fernet key; required once storage/local.py lands
 
+    # --- Files pipeline (architecture.md §8) ---
+    MAX_UPLOAD_SIZE_BYTES: int = 50 * 1024 * 1024  # 50MB
+    THUMBNAIL_MAX_DIMENSION: int = 512
+
     # --- S3 (unused while STORAGE_BACKEND=local) ---
     S3_BUCKET: str | None = None
     S3_REGION: str | None = None

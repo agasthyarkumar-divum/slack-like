@@ -1,2 +1,3 @@
-# ConnectionManager (Redis pub/sub fan-out) and the WS router land here in
-# Phase 6 — see architecture.md §3 and docs/websocket-events.md.
+# ConnectionManager (Redis pub/sub fan-out) + WS router (architecture.md §3,
+# docs/websocket-events.md). Feature modules broadcast via ws.manager.manager
+# rather than holding their own connection state.

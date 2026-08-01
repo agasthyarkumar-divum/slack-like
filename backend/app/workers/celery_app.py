@@ -1,8 +1,4 @@
-"""Celery app instance (architecture.md §4, §10).
-
-Task modules (tasks_files.py for encrypt/compress/thumbnail, tasks_notifications.py
-for FCM push/digests) land in Phase 7 and Phase 9 and get added to `include` below.
-"""
+"""Celery app instance (architecture.md §4, §10)."""
 
 from celery import Celery
 
@@ -12,7 +8,7 @@ celery_app = Celery(
     "company_chat",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=[],
+    include=["app.workers.tasks_files", "app.workers.tasks_notifications"],
 )
 
 celery_app.conf.update(

@@ -20,3 +20,15 @@ celery==5.4.0
 argon2-cffi==23.1.0
 pyjwt==2.10.1
 email-validator==2.2.0
+
+# Phase 4 (storage abstraction): encrypt-at-rest for LocalFileSystemBackend
+# (architecture.md §2, §10 — "cryptography (Fernet or AES-GCM)").
+cryptography==44.0.0
+
+# Phase 7 (files pipeline): image thumbnails, non-media compression. Video
+# thumbnailing (ffmpeg-python, §10) is deferred — no ffmpeg binary guaranteed
+# in this environment and it's a materially bigger scope; images cover the
+# common case for now.
+Pillow==11.1.0
+zstandard==0.23.0
+python-multipart==0.0.20
