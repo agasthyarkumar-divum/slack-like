@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Screen } from "@/components/Screen";
 import { listNotifications, markAllRead, markRead } from "@/lib/api/notifications";
 import type { Notification } from "@/lib/api/types";
+import { useNotifications } from "@/lib/notifications/NotificationsContext";
 import { useTheme } from "@/lib/theme/ThemeContext";
 import { fonts, radii, spacing } from "@/lib/theme/tokens";
 import { useWS } from "@/lib/ws/WSContext";
@@ -27,15 +28,14 @@ export default function NotificationsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { subscribe } = useWS();
+  const { unreadCount, refresh: refreshUnreadCount } = useNotifications();
   const [items, setItems] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     const data = await listNotifications();
     setItems(data.items);
-    setUnreadCount(data.unread_count);
   }, []);
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function NotificationsScreen() {
 
   async function handleRefresh() {
     setIsRefreshing(true);
-    await load();
+    await Promise.all([load(), refreshUnreadCount()]);
     setIsRefreshing(false);
   }
 
@@ -54,7 +54,7 @@ export default function NotificationsScreen() {
     if (!notification.is_read) {
       await markRead(notification.id);
       setItems((prev) => prev.map((n) => (n.id === notification.id ? { ...n, is_read: true } : n)));
-      setUnreadCount((prev) => Math.max(0, prev - 1));
+      await refreshUnreadCount();
     }
     const channelId = (notification.payload as { channel_id?: string }).channel_id;
     if (channelId) router.push(`/channel/${channelId}`);
@@ -63,7 +63,7 @@ export default function NotificationsScreen() {
   async function handleMarkAllRead() {
     await markAllRead();
     setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    setUnreadCount(0);
+    await refreshUnreadCount();
   }
 
   return (

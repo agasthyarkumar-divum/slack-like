@@ -14,9 +14,10 @@ import {
 } from "react-native";
 
 import { MessageBubble } from "@/components/MessageBubble";
-import { getChannel } from "@/lib/api/channels";
+import { getChannel, listMembers } from "@/lib/api/channels";
 import { listMessages, sendMessage } from "@/lib/api/messages";
 import type { Channel, Message } from "@/lib/api/types";
+import { useUserName } from "@/lib/api/userDirectory";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { useTheme } from "@/lib/theme/ThemeContext";
 import { fonts, radii, spacing } from "@/lib/theme/tokens";
@@ -31,6 +32,47 @@ function timeLabel(iso: string | null): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function TypingIndicator({ userIds }: { userIds: string[] }) {
+  const { colors } = useTheme();
+  // Fixed number of hook calls regardless of how many people are typing —
+  // rules of hooks don't allow calling useUserName in a .map().
+  const firstName = useUserName(userIds[0] ?? null);
+  const secondName = useUserName(userIds[1] ?? null);
+
+  if (userIds.length === 0) return null;
+  let text: string;
+  if (userIds.length === 1) text = `${firstName || "Someone"} is typing…`;
+  else if (userIds.length === 2) text = `${firstName || "Someone"} and ${secondName || "someone"} are typing…`;
+  else text = "Several people are typing…";
+
+  return <Text style={[styles.typingIndicator, { color: colors.textSecondary }]}>{text}</Text>;
+}
+
+function MessageRow({
+  item,
+  isMine,
+  showSenderName,
+  deliveryStatus,
+}: {
+  item: Message;
+  isMine: boolean;
+  showSenderName: boolean;
+  deliveryStatus: "sent" | "seen" | undefined;
+}) {
+  const senderName = useUserName(showSenderName ? item.sender_id : null);
+  return (
+    <MessageBubble
+      content={item.content}
+      isMine={isMine}
+      isEdited={item.is_edited ?? false}
+      timeLabel={timeLabel(item.created_at)}
+      hasAttachment={item.attachment_ids.length > 0}
+      senderName={showSenderName ? senderName : undefined}
+      deliveryStatus={deliveryStatus}
+    />
+  );
+}
+
 export default function ChatScreen() {
   const { id: channelId } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
@@ -39,6 +81,7 @@ export default function ChatScreen() {
   const { subscribe, send } = useWS();
 
   const [channel, setChannel] = useState<Channel | null>(null);
+  const [dmOtherUserId, setDmOtherUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]); // newest first (index 0)
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,9 +89,14 @@ export default function ChatScreen() {
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
+  const [seenUpToTimestamp, setSeenUpToTimestamp] = useState<string | null>(null);
 
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const lastTypingSentAtRef = useRef(0);
+  const messagesRef = useRef<Message[]>([]);
+  messagesRef.current = messages;
+
+  const dmOtherName = useUserName(channel?.type === "dm" ? dmOtherUserId : null);
 
   useEffect(() => {
     if (!channelId) return;
@@ -58,12 +106,24 @@ export default function ChatScreen() {
         listMessages(channelId),
       ]);
       setChannel(channelData);
-      navigation.setOptions({ title: channelData.type === "dm" ? channelData.name : `#${channelData.name}` });
+      if (channelData.type === "dm") {
+        const members = await listMembers(channelId);
+        const other = members.find((m) => m.user_id !== user?.id);
+        if (other) setDmOtherUserId(other.user_id);
+      } else {
+        navigation.setOptions({ title: `#${channelData.name}` });
+      }
       setMessages(messagesData.items);
       setNextCursor(messagesData.next_cursor);
       setIsLoading(false);
     })();
-  }, [channelId, navigation]);
+  }, [channelId, navigation, user?.id]);
+
+  useEffect(() => {
+    if (channel?.type === "dm" && dmOtherName) {
+      navigation.setOptions({ title: dmOtherName });
+    }
+  }, [channel?.type, dmOtherName, navigation]);
 
   useEffect(() => {
     if (!channelId) return undefined;
@@ -108,6 +168,17 @@ export default function ChatScreen() {
         return next;
       });
     });
+    // read_receipt.update's payload has no channel_id (docs/websocket-events.md)
+    // — whether it's relevant to *this* chat is inferred from whether the
+    // acknowledged message_id is one of ours, which is channel-scoped anyway.
+    const unsubRead = subscribe("read_receipt.update", (data) => {
+      if (data.user_id === user?.id) return;
+      const seenMessage = messagesRef.current.find((m) => m.id === data.message_id);
+      const seenAt = seenMessage?.created_at;
+      if (seenAt) {
+        setSeenUpToTimestamp((prev) => (!prev || seenAt > prev ? seenAt : prev));
+      }
+    });
 
     return () => {
       unsubNew();
@@ -115,8 +186,20 @@ export default function ChatScreen() {
       unsubDeleted();
       unsubTypingStart();
       unsubTypingStop();
+      unsubRead();
     };
   }, [channelId, subscribe, user?.id]);
+
+  // Mark the newest message read whenever it changes, as long as it's not ours.
+  const newestMessageId = messages[0]?.id;
+  useEffect(() => {
+    if (!channelId || !newestMessageId) return;
+    const newest = messages[0];
+    if (newest && newest.sender_id && newest.sender_id !== user?.id) {
+      send("read_receipt.update", { message_id: newest.id });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelId, newestMessageId, user?.id]);
 
   const handleLoadMore = useCallback(async () => {
     if (!channelId || !nextCursor || isLoadingMore) return;
@@ -162,6 +245,8 @@ export default function ChatScreen() {
     );
   }
 
+  const latestMineMessageId = messages.find((m) => m.sender_id === user?.id)?.id;
+
   return (
     <KeyboardAvoidingView
       style={[styles.flex, { backgroundColor: colors.bgBase }]}
@@ -177,15 +262,20 @@ export default function ChatScreen() {
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.4}
         ListFooterComponent={isLoadingMore ? <ActivityIndicator style={styles.loadingMore} color={colors.accentMoss} /> : null}
-        renderItem={({ item }) => (
-          <MessageBubble
-            content={item.content}
-            isMine={item.sender_id === user?.id}
-            isEdited={item.is_edited ?? false}
-            timeLabel={timeLabel(item.created_at)}
-            hasAttachment={item.attachment_ids.length > 0}
-          />
-        )}
+        renderItem={({ item }) => {
+          const isMine = item.sender_id === user?.id;
+          const isSeen = Boolean(seenUpToTimestamp && item.created_at && item.created_at <= seenUpToTimestamp);
+          const deliveryStatus =
+            isMine && item.id === latestMineMessageId ? (isSeen ? "seen" : "sent") : undefined;
+          return (
+            <MessageRow
+              item={item}
+              isMine={isMine}
+              showSenderName={!isMine && channel.type !== "dm"}
+              deliveryStatus={deliveryStatus}
+            />
+          );
+        }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No messages yet.</Text>
@@ -194,11 +284,7 @@ export default function ChatScreen() {
         }
       />
 
-      {typingUserIds.size > 0 ? (
-        <Text style={[styles.typingIndicator, { color: colors.textSecondary }]}>
-          {typingUserIds.size === 1 ? "Someone is typing…" : "Several people are typing…"}
-        </Text>
-      ) : null}
+      <TypingIndicator userIds={Array.from(typingUserIds)} />
 
       <View style={[styles.composer, { borderTopColor: colors.borderHairline, backgroundColor: colors.bgSurfaceRaised }]}>
         <TextInput

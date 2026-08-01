@@ -25,3 +25,8 @@ export async function listMembers(channelId: string): Promise<ChannelMember[]> {
   const { data } = await api.get<ChannelMember[]>(`/channels/${channelId}/members`);
   return data;
 }
+
+export async function startDM(otherUserId: string): Promise<Channel> {
+  const { data } = await api.post<Channel>(`/channels/dm/${otherUserId}`);
+  return data;
+}

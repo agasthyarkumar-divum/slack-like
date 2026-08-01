@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Channel, ChannelMember, User
@@ -57,6 +57,26 @@ async def list_member_users(db: AsyncSession, channel_id: uuid.UUID) -> list[Use
         )
     )
     return list(result.scalars().all())
+
+
+async def find_dm_channel(
+    db: AsyncSession, *, user_id: uuid.UUID, other_user_id: uuid.UUID
+) -> Channel | None:
+    """A 'dm' channel with *exactly* these two members, or None. Used to avoid
+    creating a fresh DM channel every time two people message each other.
+    """
+    result = await db.execute(
+        select(Channel)
+        .join(ChannelMember, ChannelMember.channel_id == Channel.id)
+        .where(Channel.type == "dm")
+        .group_by(Channel.id)
+        .having(
+            func.count(ChannelMember.user_id) == 2,
+            func.bool_or(ChannelMember.user_id == user_id),
+            func.bool_or(ChannelMember.user_id == other_user_id),
+        )
+    )
+    return result.scalars().first()
 
 
 async def list_channels_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[Channel]:

@@ -4,7 +4,9 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Channel, ChannelMember
+from app.modules.auth import repository as auth_repository
 from app.modules.channels import repository
+from app.modules.messages import repository as messages_repository
 
 _MANAGE_ROLES = {"owner", "admin"}
 
@@ -47,8 +49,10 @@ async def create_channel(
     return channel
 
 
-async def list_my_channels(db: AsyncSession, user_id: uuid.UUID) -> list[Channel]:
-    return await repository.list_channels_for_user(db, user_id)
+async def list_my_channels(db: AsyncSession, user_id: uuid.UUID) -> list[tuple[Channel, int]]:
+    channels = await repository.list_channels_for_user(db, user_id)
+    unread_counts = await messages_repository.count_unread_by_channel(db, user_id)
+    return [(channel, unread_counts.get(channel.id, 0)) for channel in channels]
 
 
 async def get_channel(db: AsyncSession, *, channel_id: uuid.UUID, user_id: uuid.UUID) -> Channel:
@@ -111,3 +115,29 @@ async def remove_member(
 async def list_members(db: AsyncSession, *, channel_id: uuid.UUID, user_id: uuid.UUID):
     await require_membership(db, channel_id=channel_id, user_id=user_id)
     return await repository.list_members(db, channel_id)
+
+
+async def get_or_create_dm(
+    db: AsyncSession, *, user_id: uuid.UUID, other_user_id: uuid.UUID
+) -> Channel:
+    if user_id == other_user_id:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Can't start a DM with yourself.")
+    other_user = await auth_repository.get_user_by_id(db, other_user_id)
+    if other_user is None or not other_user.is_active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found.")
+
+    existing = await repository.find_dm_channel(db, user_id=user_id, other_user_id=other_user_id)
+    if existing is not None:
+        return existing
+
+    # `name` is never shown as-is for a DM — the client resolves the other
+    # member's display name from membership instead (there's no single "DM
+    # name" that makes sense from both participants' points of view).
+    channel = await repository.create_channel(
+        db, name="Direct Message", type="dm", topic=None, created_by=user_id
+    )
+    await repository.add_member(db, channel_id=channel.id, user_id=user_id, role="member")
+    await repository.add_member(db, channel_id=channel.id, user_id=other_user_id, role="member")
+    await db.commit()
+    await db.refresh(channel)
+    return channel

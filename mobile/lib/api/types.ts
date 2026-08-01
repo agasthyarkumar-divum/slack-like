@@ -17,6 +17,7 @@ export type Channel = {
   topic: string | null;
   created_by: string | null;
   created_at: string | null;
+  unread_count: number;
 };
 
 export type ChannelMember = {

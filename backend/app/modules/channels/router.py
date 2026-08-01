@@ -43,6 +43,27 @@ async def create_channel(
     return ChannelOut.model_validate(channel)
 
 
+@router.post(
+    "/dm/{other_user_id}",
+    response_model=ChannelOut,
+    summary="Start (or open) a DM with a user",
+    description="Returns the existing DM channel with this user if one exists, "
+    "otherwise creates it — never creates duplicates.",
+    responses={
+        401: {"description": "Missing or invalid access token."},
+        404: {"description": "User not found."},
+        422: {"description": "Can't start a DM with yourself."},
+    },
+)
+async def get_or_create_dm(
+    other_user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ChannelOut:
+    channel = await service.get_or_create_dm(db, user_id=current_user.id, other_user_id=other_user_id)
+    return ChannelOut.model_validate(channel)
+
+
 @router.get(
     "",
     response_model=list[ChannelOut],
@@ -53,8 +74,11 @@ async def create_channel(
 async def list_my_channels(
     db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ) -> list[ChannelOut]:
-    channels = await service.list_my_channels(db, current_user.id)
-    return [ChannelOut.model_validate(c) for c in channels]
+    channels_with_counts = await service.list_my_channels(db, current_user.id)
+    return [
+        ChannelOut(**ChannelOut.model_validate(channel).model_dump(exclude={"unread_count"}), unread_count=count)
+        for channel, count in channels_with_counts
+    ]
 
 
 @router.get(

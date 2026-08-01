@@ -48,6 +48,35 @@ async def test_search_messages_scoped_to_membership(client, db_session):
     assert as_stranger.json()["messages"] == []
 
 
+async def test_search_matches_on_any_word_not_all_of_them(client, db_session):
+    # Regression: plainto_tsquery ANDs every query word together, so searching
+    # "lunch meeting" against a message that only contains "lunch" (not
+    # "meeting") used to return zero results — search felt broken for any
+    # query that wasn't an exact word-for-word match.
+    alice = await register_and_login(client, "alice@example.com")
+    channel = (
+        await client.post(
+            "/channels", json={"name": "or-search-test", "type": "public", "member_ids": []},
+            headers=auth_header(alice),
+        )
+    ).json()
+    message = (
+        await client.post(
+            f"/channels/{channel['id']}/messages",
+            json={"content": "quick lunch sync moved to tomorrow afternoon"},
+            headers=auth_header(alice),
+        )
+    ).json()
+    await _set_search_vector(db_session, "messages", message["id"], "quick lunch sync moved to tomorrow afternoon")
+
+    response = await client.get(
+        "/search", params={"q": "lunch meeting", "type": "messages"}, headers=auth_header(alice)
+    )
+    assert response.status_code == 200
+    ids = [m["id"] for m in response.json()["messages"]]
+    assert message["id"] in ids
+
+
 async def test_search_users_is_not_membership_scoped(client, db_session):
     alice = await register_and_login(client, "alice@example.com")
     bob_tokens = await register_and_login(client, "bob@example.com", display_name="Bob Searchable")

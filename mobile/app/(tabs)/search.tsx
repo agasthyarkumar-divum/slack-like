@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { Screen } from "@/components/Screen";
+import { startDM } from "@/lib/api/channels";
 import { search as runSearch } from "@/lib/api/search";
 import type { SearchResponse, SearchType } from "@/lib/api/types";
 import { useTheme } from "@/lib/theme/ThemeContext";
@@ -26,7 +27,18 @@ export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<SearchResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [startingDmFor, setStartingDmFor] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function handleStartDM(userId: string) {
+    setStartingDmFor(userId);
+    try {
+      const channel = await startDM(userId);
+      router.push(`/channel/${channel.id}`);
+    } finally {
+      setStartingDmFor(null);
+    }
+  }
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -135,13 +147,19 @@ export default function SearchScreen() {
             ))}
           {result?.type === "users" &&
             result.users?.map((u) => (
-              <View key={u.id} style={[styles.resultRow, styles.resultRowFlex, { borderColor: colors.borderHairline }]}>
+              <Pressable
+                key={u.id}
+                onPress={() => handleStartDM(u.id)}
+                disabled={startingDmFor === u.id}
+                style={[styles.resultRow, styles.resultRowFlex, { borderColor: colors.borderHairline }]}
+              >
                 <Avatar name={u.display_name} size={36} />
-                <View>
+                <View style={styles.flexOne}>
                   <Text style={[styles.resultPrimary, { color: colors.textPrimary }]}>{u.display_name}</Text>
                   <Text style={[styles.resultSecondary, { color: colors.textSecondary }]}>{u.email}</Text>
                 </View>
-              </View>
+                {startingDmFor === u.id ? <ActivityIndicator size="small" color={colors.accentMoss} /> : null}
+              </Pressable>
             ))}
           {result?.type === "files" &&
             result.files?.map((f) => (
@@ -175,6 +193,7 @@ const styles = StyleSheet.create({
   results: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, gap: spacing.sm },
   resultRow: { paddingVertical: spacing.sm + 2, borderBottomWidth: 1 },
   resultRowFlex: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  flexOne: { flex: 1 },
   resultPrimary: { fontFamily: fonts.bodyMedium, fontSize: 14 },
   resultSecondary: { fontFamily: fonts.body, fontSize: 12 },
 });

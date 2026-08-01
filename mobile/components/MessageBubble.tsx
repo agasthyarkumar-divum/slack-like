@@ -1,7 +1,10 @@
-import { Image, ImageBackground, StyleSheet, Text, View } from "react-native";
+import { Check, CheckCheck } from "lucide-react-native";
+import { ImageBackground, StyleSheet, Text, View } from "react-native";
 
 import { useTheme } from "@/lib/theme/ThemeContext";
 import { fonts, radii, spacing } from "@/lib/theme/tokens";
+
+type DeliveryStatus = "sent" | "seen";
 
 type MessageBubbleProps = {
   content: string | null;
@@ -9,13 +12,26 @@ type MessageBubbleProps = {
   isEdited?: boolean;
   timeLabel: string;
   hasAttachment?: boolean;
+  senderName?: string;
+  /** Only pass this for the sender's own latest message — a check per
+   * message would be noisy; one running status at the bottom of the
+   * conversation is the usual chat-app convention. */
+  deliveryStatus?: DeliveryStatus;
 };
 
 // Signature element: a barely-visible warm paper-grain noise overlay on
 // received bubbles (bg.surface) — felt more than seen, so the chat surface
 // reads as tactile rather than flat digital. Sent bubbles (moss, already a
 // saturated fill) skip it to avoid muddying the accent color.
-export function MessageBubble({ content, isMine, isEdited, timeLabel, hasAttachment }: MessageBubbleProps) {
+export function MessageBubble({
+  content,
+  isMine,
+  isEdited,
+  timeLabel,
+  hasAttachment,
+  senderName,
+  deliveryStatus,
+}: MessageBubbleProps) {
   const { colors, isDark } = useTheme();
 
   const bubbleStyle = [
@@ -30,16 +46,24 @@ export function MessageBubble({ content, isMine, isEdited, timeLabel, hasAttachm
 
   const body = (
     <>
+      {senderName ? <Text style={[styles.senderName, { color: colors.accentMoss }]}>{senderName}</Text> : null}
       {hasAttachment ? (
         <View style={[styles.attachmentChip, { borderColor: metaColor }]}>
           <Text style={[styles.attachmentText, { color: textColor }]}>📎 attachment</Text>
         </View>
       ) : null}
       {content ? <Text style={[styles.content, { color: textColor }]}>{content}</Text> : null}
-      <Text style={[styles.meta, { color: metaColor }]}>
-        {timeLabel}
-        {isEdited ? " · edited" : ""}
-      </Text>
+      <View style={styles.metaRow}>
+        <Text style={[styles.meta, { color: metaColor }]}>
+          {timeLabel}
+          {isEdited ? " · edited" : ""}
+        </Text>
+        {deliveryStatus === "seen" ? (
+          <CheckCheck size={13} color={metaColor} strokeWidth={2} />
+        ) : deliveryStatus === "sent" ? (
+          <Check size={13} color={metaColor} strokeWidth={2} />
+        ) : null}
+      </View>
     </>
   );
 
@@ -77,8 +101,10 @@ const styles = StyleSheet.create({
     gap: 2,
     overflow: "hidden",
   },
+  senderName: { fontFamily: fonts.bodySemiBold, fontSize: 12, marginBottom: 1 },
   content: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21 },
-  meta: { fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  meta: { fontFamily: fonts.body, fontSize: 11 },
   attachmentChip: {
     borderWidth: 1,
     borderRadius: radii.sm,

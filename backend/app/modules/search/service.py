@@ -5,8 +5,9 @@ current user is allowed to see; nothing here bypasses channel membership.
 """
 
 import uuid
+from functools import reduce
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,10 +21,26 @@ def _clamp(limit: int) -> int:
     return max(1, min(limit, MAX_LIMIT))
 
 
+def _to_tsquery(query: str) -> ColumnElement:
+    """OR (not AND) the query's words together.
+
+    plainto_tsquery('lunch meeting') ANDs every word — a message containing
+    "lunch" but not "meeting" won't match at all, which makes search feel
+    broken for anyone who doesn't type the exact words in the message (i.e.
+    almost always). OR-ing per-word plainto_tsquery results together — each
+    word still gets Postgres's normal stemming — finds anything containing
+    *any* of the words, and ts_rank still ranks messages matching more of
+    them higher, so it degrades gracefully instead of returning nothing.
+    """
+    words = query.split()
+    tsqueries = [func.plainto_tsquery("english", word) for word in words or [query]]
+    return reduce(lambda a, b: a.op("||")(b), tsqueries)
+
+
 async def search_messages(
     db: AsyncSession, *, user_id: uuid.UUID, query: str, limit: int
 ) -> list[Message]:
-    tsquery = func.plainto_tsquery("english", query)
+    tsquery = _to_tsquery(query)
     rank = func.ts_rank(Message.search_vector, tsquery)
     result = await db.execute(
         select(Message)
@@ -43,7 +60,7 @@ async def search_messages(
 async def search_users(db: AsyncSession, *, query: str, limit: int) -> list[User]:
     # Company directory — not membership-scoped; any authenticated user can
     # look up any other employee, same as GET /users?search=.
-    tsquery = func.plainto_tsquery("english", query)
+    tsquery = _to_tsquery(query)
     rank = func.ts_rank(User.search_vector, tsquery)
     result = await db.execute(
         select(User)
@@ -57,7 +74,7 @@ async def search_users(db: AsyncSession, *, query: str, limit: int) -> list[User
 async def search_channels(
     db: AsyncSession, *, user_id: uuid.UUID, query: str, limit: int
 ) -> list[Channel]:
-    tsquery = func.plainto_tsquery("english", query)
+    tsquery = _to_tsquery(query)
     rank = func.ts_rank(Channel.search_vector, tsquery)
     result = await db.execute(
         select(Channel)

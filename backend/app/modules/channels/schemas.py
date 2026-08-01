@@ -29,6 +29,9 @@ class ChannelOut(BaseModel):
     topic: str | None
     created_by: uuid.UUID | None
     created_at: datetime | None
+    unread_count: int = Field(
+        0, description="Only populated by GET /channels (the list endpoint) — 0 elsewhere."
+    )
 
 
 class ChannelMemberOut(BaseModel):

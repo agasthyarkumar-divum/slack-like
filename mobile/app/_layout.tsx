@@ -15,6 +15,7 @@ import { useEffect } from "react";
 import type { PropsWithChildren } from "react";
 
 import { AuthProvider, useAuth } from "@/lib/auth/AuthContext";
+import { NotificationsProvider } from "@/lib/notifications/NotificationsContext";
 import { ThemeProvider, useTheme } from "@/lib/theme/ThemeContext";
 import { fonts } from "@/lib/theme/tokens";
 import { WSProvider } from "@/lib/ws/WSContext";
@@ -76,9 +77,11 @@ export default function RootLayout() {
     <ThemeProvider>
       <AuthProvider>
         <WSProvider>
-          <AuthGate>
-            <ThemedStack />
-          </AuthGate>
+          <NotificationsProvider>
+            <AuthGate>
+              <ThemedStack />
+            </AuthGate>
+          </NotificationsProvider>
         </WSProvider>
       </AuthProvider>
     </ThemeProvider>

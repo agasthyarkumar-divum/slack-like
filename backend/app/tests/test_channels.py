@@ -55,6 +55,42 @@ async def test_list_my_channels_only_shows_membership(client):
     assert bob_channels.json() == []
 
 
+async def test_unread_count_excludes_own_messages_and_read_ones(client, db_session):
+    alice = await register_and_login(client, "alice@example.com")
+    bob = await register_and_login(client, "bob@example.com")
+    bob_id = (await client.get("/users/me", headers=auth_header(bob))).json()["id"]
+    channel_id = (await _create_channel(client, alice, member_ids=[bob_id])).json()["id"]
+
+    # alice sends 3 messages — none should count as unread for alice herself.
+    message_ids = []
+    for i in range(3):
+        sent = await client.post(
+            f"/channels/{channel_id}/messages", json={"content": f"msg {i}"}, headers=auth_header(alice)
+        )
+        message_ids.append(sent.json()["id"])
+
+    alice_channels = (await client.get("/channels", headers=auth_header(alice))).json()
+    assert next(c for c in alice_channels if c["id"] == channel_id)["unread_count"] == 0
+
+    bob_channels = (await client.get("/channels", headers=auth_header(bob))).json()
+    assert next(c for c in bob_channels if c["id"] == channel_id)["unread_count"] == 3
+
+    # Reacting isn't reading — count should be unaffected.
+    await client.post(f"/messages/{message_ids[0]}/reactions", json={"emoji": "x"}, headers=auth_header(bob))
+    bob_channels = (await client.get("/channels", headers=auth_header(bob))).json()
+    assert next(c for c in bob_channels if c["id"] == channel_id)["unread_count"] == 3
+
+    # Marking one read (normally driven by the read_receipt.update WS event —
+    # simulated here directly since this test client is REST-only) should
+    # drop the count by exactly one.
+    from app.modules.messages import repository as messages_repository
+
+    await messages_repository.mark_read(db_session, message_id=message_ids[0], user_id=bob_id)
+    await db_session.commit()
+    bob_channels = (await client.get("/channels", headers=auth_header(bob))).json()
+    assert next(c for c in bob_channels if c["id"] == channel_id)["unread_count"] == 2
+
+
 async def test_get_channel_requires_membership(client):
     alice = await register_and_login(client, "alice@example.com")
     bob = await register_and_login(client, "bob@example.com")
@@ -139,3 +175,49 @@ async def test_owner_can_remove_a_member(client):
     assert response.status_code == 204
     still_visible_to_bob = await client.get(f"/channels/{channel_id}", headers=auth_header(bob))
     assert still_visible_to_bob.status_code == 404
+
+
+async def test_dm_creates_a_channel_with_both_members(client):
+    alice = await register_and_login(client, "alice@example.com")
+    bob = await register_and_login(client, "bob@example.com")
+    bob_id = (await client.get("/users/me", headers=auth_header(bob))).json()["id"]
+
+    response = await client.post(f"/channels/dm/{bob_id}", headers=auth_header(alice))
+    assert response.status_code == 200
+    assert response.json()["type"] == "dm"
+
+    members = await client.get(
+        f"/channels/{response.json()['id']}/members", headers=auth_header(alice)
+    )
+    member_ids = {m["user_id"] for m in members.json()}
+    assert member_ids == {bob_id, (await client.get("/users/me", headers=auth_header(alice))).json()["id"]}
+
+
+async def test_dm_is_idempotent(client):
+    alice = await register_and_login(client, "alice@example.com")
+    bob = await register_and_login(client, "bob@example.com")
+    bob_id = (await client.get("/users/me", headers=auth_header(bob))).json()["id"]
+
+    first = await client.post(f"/channels/dm/{bob_id}", headers=auth_header(alice))
+    second = await client.post(f"/channels/dm/{bob_id}", headers=auth_header(alice))
+    # Also symmetric: bob starting a DM with alice should find the same channel.
+    alice_id = (await client.get("/users/me", headers=auth_header(alice))).json()["id"]
+    third = await client.post(f"/channels/dm/{alice_id}", headers=auth_header(bob))
+
+    assert first.json()["id"] == second.json()["id"] == third.json()["id"]
+
+
+async def test_cannot_dm_yourself(client):
+    alice = await register_and_login(client, "alice@example.com")
+    alice_id = (await client.get("/users/me", headers=auth_header(alice))).json()["id"]
+
+    response = await client.post(f"/channels/dm/{alice_id}", headers=auth_header(alice))
+    assert response.status_code == 422
+
+
+async def test_dm_with_unknown_user_404s(client):
+    alice = await register_and_login(client, "alice@example.com")
+    response = await client.post(
+        "/channels/dm/00000000-0000-0000-0000-000000000000", headers=auth_header(alice)
+    )
+    assert response.status_code == 404

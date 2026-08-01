@@ -15,14 +15,60 @@ import {
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { Screen } from "@/components/Screen";
-import { createChannel, listMyChannels } from "@/lib/api/channels";
+import { createChannel, listMembers, listMyChannels } from "@/lib/api/channels";
+import { useUserName } from "@/lib/api/userDirectory";
 import type { Channel } from "@/lib/api/types";
+import { useAuth } from "@/lib/auth/AuthContext";
 import { useTheme } from "@/lib/theme/ThemeContext";
 import { fonts, radii, spacing } from "@/lib/theme/tokens";
+import { useWS } from "@/lib/ws/WSContext";
+
+function ChannelRow({ channel, onPress }: { channel: Channel; onPress: () => void }) {
+  const { colors } = useTheme();
+  const { user } = useAuth();
+  const [otherUserId, setOtherUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (channel.type !== "dm") return undefined;
+    let cancelled = false;
+    listMembers(channel.id).then((members) => {
+      if (cancelled) return;
+      const other = members.find((m) => m.user_id !== user?.id);
+      if (other) setOtherUserId(other.user_id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [channel.id, channel.type, user?.id]);
+
+  const dmName = useUserName(otherUserId);
+  const isDM = channel.type === "dm";
+  const displayName = isDM ? dmName || "Direct message" : channel.name;
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
+      <Avatar name={displayName} size={44} />
+      <View style={styles.rowText}>
+        <Text style={[styles.channelName, { color: colors.textPrimary }]} numberOfLines={1}>
+          {isDM ? displayName : `#${channel.name}`}
+        </Text>
+        <Text style={[styles.channelTopic, { color: colors.textSecondary }]} numberOfLines={1}>
+          {isDM ? "Direct message" : channel.topic || "No topic set."}
+        </Text>
+      </View>
+      {channel.unread_count > 0 ? (
+        <View style={[styles.badge, { backgroundColor: colors.accentMoss }]}>
+          <Text style={styles.badgeText}>{channel.unread_count > 99 ? "99+" : channel.unread_count}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
 
 export default function HomeScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { subscribe } = useWS();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -37,6 +83,10 @@ export default function HomeScreen() {
   useEffect(() => {
     loadChannels().finally(() => setIsLoading(false));
   }, [loadChannels]);
+
+  // New messages change unread counts for whichever channel they land in —
+  // simplest correct refresh is to just re-fetch the list (cheap, infrequent).
+  useEffect(() => subscribe("message.new", () => loadChannels()), [subscribe, loadChannels]);
 
   async function handleRefresh() {
     setIsRefreshing(true);
@@ -100,20 +150,7 @@ export default function HomeScreen() {
           }
           ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: colors.borderHairline }]} />}
           renderItem={({ item }) => (
-            <Pressable
-              onPress={() => router.push(`/channel/${item.id}`)}
-              style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-            >
-              <Avatar name={item.name} size={44} />
-              <View style={styles.rowText}>
-                <Text style={[styles.channelName, { color: colors.textPrimary }]}>
-                  {item.type === "dm" ? item.name : `#${item.name}`}
-                </Text>
-                <Text style={[styles.channelTopic, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {item.topic || "No topic set."}
-                </Text>
-              </View>
-            </Pressable>
+            <ChannelRow channel={item} onPress={() => router.push(`/channel/${item.id}`)} />
           )}
         />
       )}
@@ -149,4 +186,6 @@ const styles = StyleSheet.create({
   channelName: { fontFamily: fonts.bodySemiBold, fontSize: 15 },
   channelTopic: { fontFamily: fonts.body, fontSize: 13 },
   separator: { height: 1, marginLeft: spacing.lg + 44 + spacing.md },
+  badge: { minWidth: 22, height: 22, borderRadius: radii.pill, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  badgeText: { color: "#FFF", fontFamily: fonts.bodySemiBold, fontSize: 12 },
 });

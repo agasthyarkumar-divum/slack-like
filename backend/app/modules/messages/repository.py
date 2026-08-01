@@ -1,11 +1,11 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Message, MessageRead, Reaction
+from app.db.models import ChannelMember, Message, MessageRead, Reaction
 
 
 async def create_message(
@@ -86,6 +86,31 @@ async def toggle_reaction(
     db.add(Reaction(message_id=message_id, user_id=user_id, emoji=emoji))
     await db.flush()
     return True
+
+
+async def count_unread_by_channel(db: AsyncSession, user_id: uuid.UUID) -> dict[uuid.UUID, int]:
+    """channel_id -> count of that user's unread messages in it (their own
+    messages don't count, and neither do ones they've already read). Powers
+    the Home screen's per-channel unread badges.
+    """
+    result = await db.execute(
+        select(Message.channel_id, func.count(Message.id))
+        .join(
+            ChannelMember,
+            and_(ChannelMember.channel_id == Message.channel_id, ChannelMember.user_id == user_id),
+        )
+        .outerjoin(
+            MessageRead,
+            and_(MessageRead.message_id == Message.id, MessageRead.user_id == user_id),
+        )
+        .where(
+            Message.is_deleted.is_(False),
+            Message.sender_id != user_id,
+            MessageRead.message_id.is_(None),
+        )
+        .group_by(Message.channel_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
 
 
 async def mark_read(db: AsyncSession, *, message_id: uuid.UUID, user_id: uuid.UUID) -> datetime:
