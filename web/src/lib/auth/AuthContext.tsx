@@ -20,6 +20,7 @@ type AuthContextValue = {
   isAdmin: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 };
@@ -58,6 +59,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
     await loadCurrentUser();
   }
 
+  async function register(email: string, password: string, displayName: string) {
+    await api.post("/auth/register", { email, password, display_name: displayName });
+    await login(email, password);
+  }
+
   async function logout() {
     const refreshToken = await tokenStorage.getRefreshToken();
     if (refreshToken) {
@@ -75,7 +81,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const isAdmin = scope === "admin" || scope === "superAdmin";
 
   const value = useMemo(
-    () => ({ user, scope, isAdmin, isLoading, login, logout, refreshUser: loadCurrentUser }),
+    () => ({ user, scope, isAdmin, isLoading, login, register, logout, refreshUser: loadCurrentUser }),
     [user, scope, isAdmin, isLoading]
   );
 
