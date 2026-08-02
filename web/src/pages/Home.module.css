@@ -1,0 +1,229 @@
+.page {
+  min-height: 100%;
+  background: var(--bg-base);
+  display: flex;
+  flex-direction: column;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg) var(--space-xxl);
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--accent-moss-soft);
+  color: var(--accent-moss);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.brandName {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.navActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.themeToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+}
+
+.themeToggle:hover {
+  background: var(--bg-surface);
+}
+
+.navGhost {
+  padding: var(--space-sm) var(--space-lg);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+}
+
+.navGhost:hover {
+  background: var(--bg-surface);
+}
+
+.navPrimary {
+  padding: var(--space-sm) var(--space-lg);
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent-moss);
+  border-radius: var(--radius-md);
+}
+
+.hero {
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-xxl) var(--space-xl) var(--space-xl);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.headline {
+  font-family: var(--font-display);
+  font-size: 48px;
+  line-height: 1.1;
+  margin: 0 0 var(--space-lg);
+}
+
+.subheadline {
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-xl);
+  max-width: 520px;
+}
+
+.heroActions {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.ctaPrimary {
+  padding: var(--space-md) var(--space-xl);
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent-moss);
+  border-radius: var(--radius-md);
+}
+
+.ctaGhost {
+  padding: var(--space-md) var(--space-xl);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+}
+
+.features {
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-xl) var(--space-xxl);
+}
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-lg);
+}
+
+@media (max-width: 900px) {
+  .featureGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .featureGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .headline {
+    font-size: 34px;
+  }
+}
+
+.featureCard {
+  padding: var(--space-lg);
+  background: var(--bg-surface-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.featureIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--accent-moss-soft);
+  color: var(--accent-moss);
+}
+
+.featureTitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.featureDescription {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.platforms {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.finalCta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-xxl) var(--space-xl);
+  text-align: center;
+}
+
+.finalCtaTitle {
+  font-family: var(--font-display);
+  font-size: 28px;
+  margin: 0;
+}
+
+.footer {
+  padding: var(--space-xl);
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
