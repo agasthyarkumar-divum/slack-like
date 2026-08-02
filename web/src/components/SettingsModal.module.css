@@ -1,0 +1,76 @@
+.section {
+  margin-bottom: var(--space-xl);
+}
+
+.section:last-child {
+  margin-bottom: 0;
+}
+
+.sectionLabel {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-sm);
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.segment {
+  flex: 1;
+  padding: var(--space-sm) 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.segment[data-active] {
+  background: var(--accent-moss-soft);
+  color: var(--accent-moss);
+}
+
+.radioGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.radioRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--border-hairline);
+  cursor: pointer;
+}
+
+.radioRow:last-child {
+  border-bottom: none;
+}
+
+.radioRow input {
+  margin-top: 3px;
+  accent-color: var(--accent-moss);
+}
+
+.radioText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.radioLabel {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.radioDescription {
+  font-size: 12px;
+  color: var(--text-secondary);
+}

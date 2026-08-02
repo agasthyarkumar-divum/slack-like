@@ -2,6 +2,7 @@
 .env
 backend/.env
 mobile/.env
+web/.env
 
 # Python
 .venv/
@@ -18,6 +19,8 @@ mobile/node_modules/
 mobile/.expo/
 mobile/dist/
 mobile/web-build/
+web/node_modules/
+web/dist/
 *.log
 
 # OS

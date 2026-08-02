@@ -1,5 +1,6 @@
 import base64
 import uuid
+from collections import Counter
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
@@ -21,24 +22,67 @@ def _iso(dt: datetime | None) -> str | None:
     return dt.isoformat() if dt else None
 
 
+def _message_payload(message: Message) -> dict:
+    return {
+        "id": str(message.id),
+        "channel_id": str(message.channel_id),
+        "sender_id": str(message.sender_id) if message.sender_id else None,
+        "content": message.content,
+        "reply_to_id": str(message.reply_to_id) if message.reply_to_id else None,
+        "forwarded_from_id": str(message.forwarded_from_id) if message.forwarded_from_id else None,
+        "is_pinned": message.is_pinned,
+        "is_edited": message.is_edited,
+        "created_at": _iso(message.created_at),
+        "attachment_ids": [str(a.id) for a in message.attachments],
+        # Freshly created/edited messages have no reactions/replies yet — kept
+        # here (rather than omitted) so every message.new/thread.reply.new
+        # payload has the same shape as a MessageOut from the REST API.
+        "reactions": [],
+        "reply_count": 0,
+        "last_reply_at": None,
+    }
+
+
 async def _broadcast_new(message: Message) -> None:
+    """Top-level messages only — replies broadcast `thread.reply.new` instead
+    (see `_broadcast_thread_reply`), since `list_messages_for_channel` excludes
+    replies and a client watching the main timeline shouldn't see them appear.
+    """
+    await manager.broadcast_to_channel(
+        str(message.channel_id), {"event": "message.new", "data": _message_payload(message)}
+    )
+
+
+async def _broadcast_thread_reply(message: Message) -> None:
     await manager.broadcast_to_channel(
         str(message.channel_id),
         {
-            "event": "message.new",
+            "event": "thread.reply.new",
+            "data": {"parent_id": str(message.reply_to_id), **_message_payload(message)},
+        },
+    )
+
+
+async def _broadcast_reaction(
+    message: Message, *, user_id: uuid.UUID, emoji: str, added: bool
+) -> None:
+    """Broadcasts the emoji->count totals (not per-user `me`, which only makes
+    sense from one viewer's perspective) plus who/what changed, so every
+    client can update pill counts and — only for the (emoji, user_id) that
+    changed — its own `me` flag if user_id is itself.
+    """
+    counts = Counter(r.emoji for r in message.reactions)
+    await manager.broadcast_to_channel(
+        str(message.channel_id),
+        {
+            "event": "message.reaction",
             "data": {
                 "id": str(message.id),
                 "channel_id": str(message.channel_id),
-                "sender_id": str(message.sender_id) if message.sender_id else None,
-                "content": message.content,
-                "reply_to_id": str(message.reply_to_id) if message.reply_to_id else None,
-                "forwarded_from_id": str(message.forwarded_from_id)
-                if message.forwarded_from_id
-                else None,
-                "is_pinned": message.is_pinned,
-                "is_edited": message.is_edited,
-                "created_at": _iso(message.created_at),
-                "attachment_ids": [str(a.id) for a in message.attachments],
+                "user_id": str(user_id),
+                "emoji": emoji,
+                "added": added,
+                "reactions": [{"emoji": e, "count": c} for e, c in counts.items()],
             },
         },
     )
@@ -117,7 +161,7 @@ async def _require_message(db: AsyncSession, message_id: uuid.UUID) -> Message:
 
 async def list_messages(
     db: AsyncSession, *, channel_id: uuid.UUID, user_id: uuid.UUID, cursor: str | None, limit: int
-) -> tuple[list[Message], str | None]:
+) -> tuple[list[Message], str | None, dict[uuid.UUID, tuple[int, datetime | None]]]:
     await require_membership(db, channel_id=channel_id, user_id=user_id)
     limit = max(1, min(limit, MAX_PAGE_SIZE))
     decoded_cursor = _decode_cursor(cursor) if cursor else None
@@ -129,7 +173,28 @@ async def list_messages(
     has_more = len(rows) > limit
     page = rows[:limit]
     next_cursor = _encode_cursor(page[-1]) if has_more and page else None
-    return page, next_cursor
+    reply_counts = await repository.count_replies_for_messages(db, message_ids=[m.id for m in page])
+    return page, next_cursor, reply_counts
+
+
+async def list_replies(
+    db: AsyncSession, *, message_id: uuid.UUID, user_id: uuid.UUID, cursor: str | None, limit: int
+) -> tuple[Message, list[Message], str | None, int, datetime | None]:
+    parent = await _require_message(db, message_id)
+    await require_membership(db, channel_id=parent.channel_id, user_id=user_id)
+    limit = max(1, min(limit, MAX_PAGE_SIZE))
+    decoded_cursor = _decode_cursor(cursor) if cursor else None
+
+    rows = await repository.list_replies_for_message(
+        db, parent_id=message_id, limit=limit + 1, cursor=decoded_cursor
+    )
+    has_more = len(rows) > limit
+    page = rows[:limit]
+    next_cursor = _encode_cursor(page[-1]) if has_more and page else None
+    reply_count, last_reply_at = (
+        await repository.count_replies_for_messages(db, message_ids=[message_id])
+    ).get(message_id, (0, None))
+    return parent, page, next_cursor, reply_count, last_reply_at
 
 
 async def send_message(
@@ -174,7 +239,10 @@ async def send_message(
     # this async context (MissingGreenlet). A fresh eager-loaded query is both
     # simpler and avoids that entirely.
     message = await repository.get_message_by_id(db, message.id)
-    await _broadcast_new(message)
+    if reply_to_id is not None:
+        await _broadcast_thread_reply(message)
+    else:
+        await _broadcast_new(message)
     await _notify_for_new_message(db, message)
     return message
 
@@ -215,6 +283,11 @@ async def react_to_message(
     await require_membership(db, channel_id=message.channel_id, user_id=user_id)
     added = await repository.toggle_reaction(db, message_id=message_id, user_id=user_id, emoji=emoji)
     await db.commit()
+    # Re-fetch (see send_message's comment) — message.reactions was loaded
+    # before the toggle and the session expires it on commit, but the
+    # broadcast below needs the current set to compute totals.
+    message = await repository.get_message_by_id(db, message_id)
+    await _broadcast_reaction(message, user_id=user_id, emoji=emoji, added=added)
     if added and message.sender_id and message.sender_id != user_id:
         await notifications_service.notify_user(
             db,

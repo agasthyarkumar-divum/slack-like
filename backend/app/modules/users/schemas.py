@@ -1,7 +1,10 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+NotificationPreference = Literal["all", "mentions_dms", "none"]
 
 
 class UserOut(BaseModel):
@@ -17,4 +20,11 @@ class UserOut(BaseModel):
     department_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
     role_id: uuid.UUID | None = None
+    notification_preference: NotificationPreference = "all"
     created_at: datetime | None = None
+
+
+class UserSettingsUpdate(BaseModel):
+    notification_preference: NotificationPreference = Field(
+        ..., examples=["mentions_dms"], description="'all', 'mentions_dms', or 'none'."
+    )

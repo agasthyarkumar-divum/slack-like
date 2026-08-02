@@ -1,0 +1,25 @@
+.popover {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  gap: 2px;
+  padding: var(--space-xs);
+  background: var(--bg-surface-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+}
+
+.emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+  border-radius: var(--radius-sm);
+}
+
+.emoji:hover {
+  background: var(--bg-surface);
+}

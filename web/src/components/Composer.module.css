@@ -1,0 +1,43 @@
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-xl);
+  border-top: 1px solid var(--border-hairline);
+  background: var(--bg-surface-raised);
+}
+
+.input {
+  flex: 1;
+  resize: none;
+  min-height: 40px;
+  max-height: 160px;
+  padding: var(--space-sm) var(--space-md);
+  font-size: 14px;
+  font-family: var(--font-body);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-lg);
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--accent-moss);
+}
+
+.send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent-moss);
+  color: #fff;
+}
+
+.send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

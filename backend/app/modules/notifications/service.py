@@ -10,10 +10,19 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Notification, User
+from app.modules.auth import repository as auth_repository
 from app.modules.notifications import repository
 from app.ws.manager import manager
 
 PREVIEW_MAX_LENGTH = 140
+
+# Settings screen's radio group: 'all' delivers everything (today's default
+# behavior), 'mentions_dms' drops 'reaction', 'none' drops everything.
+_SUPPRESSED_TYPES_BY_PREFERENCE = {
+    "all": set(),
+    "mentions_dms": {"reaction"},
+    "none": {"mention", "dm", "reaction"},
+}
 
 # No `username` column in the schema (architecture.md §5) — @mentions match
 # against the local-part of a channel member's email (alice@example.com -> @alice),
@@ -41,7 +50,14 @@ def find_mentioned_user_ids(content: str | None, members: list[User]) -> set[uui
     }
 
 
-async def notify_user(db: AsyncSession, *, user_id: uuid.UUID, type: str, payload: dict) -> Notification:
+async def notify_user(
+    db: AsyncSession, *, user_id: uuid.UUID, type: str, payload: dict
+) -> Notification | None:
+    recipient = await auth_repository.get_user_by_id(db, user_id)
+    preference = (recipient.notification_preference if recipient else None) or "all"
+    if type in _SUPPRESSED_TYPES_BY_PREFERENCE.get(preference, set()):
+        return None
+
     notification = await repository.create_notification(db, user_id=user_id, type=type, payload=payload)
     await db.commit()
 

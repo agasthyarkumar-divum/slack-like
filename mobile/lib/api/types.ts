@@ -1,3 +1,5 @@
+export type NotificationPreference = "all" | "mentions_dms" | "none";
+
 export type User = {
   id: string;
   email: string;
@@ -7,6 +9,7 @@ export type User = {
   department_id: string | null;
   team_id: string | null;
   role_id: string | null;
+  notification_preference: NotificationPreference;
   created_at: string | null;
 };
 
@@ -27,6 +30,12 @@ export type ChannelMember = {
   joined_at: string | null;
 };
 
+export type ReactionSummary = {
+  emoji: string;
+  count: number;
+  me: boolean;
+};
+
 export type Message = {
   id: string;
   channel_id: string | null;
@@ -40,9 +49,18 @@ export type Message = {
   created_at: string | null;
   edited_at: string | null;
   attachment_ids: string[];
+  reactions: ReactionSummary[];
+  reply_count: number;
+  last_reply_at: string | null;
 };
 
 export type MessageListResponse = {
+  items: Message[];
+  next_cursor: string | null;
+};
+
+export type ThreadRepliesResponse = {
+  parent: Message;
   items: Message[];
   next_cursor: string | null;
 };

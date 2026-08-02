@@ -1,0 +1,64 @@
+/* Design tokens — ported 1:1 from mobile/lib/theme/tokens.ts. Keep the two in
+   lockstep by hand; changing a color/spacing/radius value in one place means
+   changing it here too. Calm workspace tool, not a flashy consumer app: warm
+   off-whites and a muted moss accent in light mode, a true (not just
+   inverted-gray) warm near-black palette in dark mode, same moss accent. */
+
+:root {
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-xxl: 32px;
+
+  --font-display: "Fraunces", serif;
+  --font-body: "Inter", sans-serif;
+
+  --bg-base: #fafaf8;
+  --bg-surface: #f1efea;
+  --bg-surface-raised: #ffffff;
+  --text-primary: #2b2a26;
+  --text-secondary: #83816f;
+  --accent-moss: #5f7052;
+  --accent-moss-soft: #e5e9de;
+  --border-hairline: #e6e3da;
+  --state-error: #a6503b;
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg-base: #1c1b18;
+  --bg-surface: #26241f;
+  --bg-surface-raised: #2f2c26;
+  --text-primary: #edebe6;
+  --text-secondary: #96927f;
+  --accent-moss: #7a8f6b;
+  --accent-moss-soft: #333a2b;
+  --border-hairline: #38352e;
+  --state-error: #c17057;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-base: #1c1b18;
+    --bg-surface: #26241f;
+    --bg-surface-raised: #2f2c26;
+    --text-primary: #edebe6;
+    --text-secondary: #96927f;
+    --accent-moss: #7a8f6b;
+    --accent-moss-soft: #333a2b;
+    --border-hairline: #38352e;
+    --state-error: #c17057;
+
+    color-scheme: dark;
+  }
+}

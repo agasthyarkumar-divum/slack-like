@@ -1,20 +1,9 @@
-import { useRouter } from "expo-router";
 import { Plus } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
-import { Screen } from "@/components/Screen";
 import { createChannel, listMembers, listMyChannels } from "@/lib/api/channels";
 import { useUserName } from "@/lib/api/userDirectory";
 import type { Channel } from "@/lib/api/types";
@@ -23,7 +12,7 @@ import { useTheme } from "@/lib/theme/ThemeContext";
 import { fonts, radii, spacing } from "@/lib/theme/tokens";
 import { useWS } from "@/lib/ws/WSContext";
 
-function ChannelRow({ channel, onPress }: { channel: Channel; onPress: () => void }) {
+function ChannelRow({ channel, active, onPress }: { channel: Channel; active: boolean; onPress: () => void }) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
@@ -46,10 +35,20 @@ function ChannelRow({ channel, onPress }: { channel: Channel; onPress: () => voi
   const displayName = isDM ? dmName || "Direct message" : channel.name;
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
-      <Avatar name={displayName} size={44} />
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        active && { backgroundColor: colors.accentMossSoft },
+        pressed && !active && { opacity: 0.7 },
+      ]}
+    >
+      <Avatar name={displayName} size={40} />
       <View style={styles.rowText}>
-        <Text style={[styles.channelName, { color: colors.textPrimary }]} numberOfLines={1}>
+        <Text
+          style={[styles.channelName, { color: active ? colors.accentMoss : colors.textPrimary }]}
+          numberOfLines={1}
+        >
           {isDM ? displayName : `#${channel.name}`}
         </Text>
         <Text style={[styles.channelTopic, { color: colors.textSecondary }]} numberOfLines={1}>
@@ -65,9 +64,13 @@ function ChannelRow({ channel, onPress }: { channel: Channel; onPress: () => voi
   );
 }
 
-export default function HomeScreen() {
+type ChannelListProps = {
+  activeChannelId?: string | null;
+  onSelect: (channel: Channel) => void;
+};
+
+export function ChannelList({ activeChannelId, onSelect }: ChannelListProps) {
   const { colors } = useTheme();
-  const router = useRouter();
   const { subscribe } = useWS();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,18 +105,14 @@ export default function HomeScreen() {
       const channel = await createChannel({ name, type: "public" });
       setNewChannelName("");
       setChannels((prev) => [channel, ...prev]);
-      router.push(`/channel/${channel.id}`);
+      onSelect(channel);
     } finally {
       setIsCreating(false);
     }
   }
 
   return (
-    <Screen>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Home</Text>
-      </View>
-
+    <View style={styles.container}>
       <View style={[styles.composer, { borderColor: colors.borderHairline }]}>
         <TextInput
           value={newChannelName}
@@ -145,22 +144,19 @@ export default function HomeScreen() {
           data={channels}
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.accentMoss} />}
-          ListEmptyComponent={
-            <EmptyState title="No channels yet." subtitle="Create one above to start talking." />
-          }
+          ListEmptyComponent={<EmptyState title="No channels yet." subtitle="Create one above to start talking." />}
           ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: colors.borderHairline }]} />}
           renderItem={({ item }) => (
-            <ChannelRow channel={item} onPress={() => router.push(`/channel/${item.id}`)} />
+            <ChannelRow channel={item} active={item.id === activeChannelId} onPress={() => onSelect(item)} />
           )}
         />
       )}
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
-  title: { fontFamily: fonts.display, fontSize: 28 },
+  container: { flex: 1 },
   composer: {
     flexDirection: "row",
     alignItems: "center",
@@ -181,11 +177,11 @@ const styles = StyleSheet.create({
     margin: 4,
   },
   loading: { marginTop: spacing.xxl },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radii.sm },
   rowText: { flex: 1, gap: 2 },
   channelName: { fontFamily: fonts.bodySemiBold, fontSize: 15 },
   channelTopic: { fontFamily: fonts.body, fontSize: 13 },
-  separator: { height: 1, marginLeft: spacing.lg + 44 + spacing.md },
+  separator: { height: 1, marginLeft: spacing.lg + 40 + spacing.md },
   badge: { minWidth: 22, height: 22, borderRadius: radii.pill, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   badgeText: { color: "#FFF", fontFamily: fonts.bodySemiBold, fontSize: 12 },
 });

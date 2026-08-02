@@ -39,6 +39,7 @@ class Message(UUIDPKMixin, Base):
     # degrades to an extra query rather than crashing. list/get repository
     # functions eager-load it via selectinload() for the hot paths regardless.
     attachments: Mapped[list["Attachment"]] = relationship(foreign_keys="Attachment.message_id")
+    reactions: Mapped[list["Reaction"]] = relationship(foreign_keys="Reaction.message_id")
 
 
 class Attachment(UUIDPKMixin, Base):

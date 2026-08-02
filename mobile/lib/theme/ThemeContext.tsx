@@ -5,13 +5,14 @@ import { useColorScheme } from "react-native";
 import { getItem, setItem } from "@/lib/storage/platformStorage";
 import { type ColorTokens, darkColors, lightColors } from "@/lib/theme/tokens";
 
-type ThemeMode = "system" | "light" | "dark";
+export type ThemeMode = "light" | "dark";
 
 type ThemeContextValue = {
   mode: ThemeMode;
   isDark: boolean;
   colors: ColorTokens;
   setMode: (mode: ThemeMode) => void;
+  toggle: () => void;
 };
 
 const THEME_MODE_KEY = "divum_chat_theme_mode";
@@ -20,12 +21,12 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme();
-  const [mode, setModeState] = useState<ThemeMode>("system");
+  const [mode, setModeState] = useState<ThemeMode>(systemScheme === "dark" ? "dark" : "light");
 
   useEffect(() => {
     (async () => {
       const stored = await getItem(THEME_MODE_KEY);
-      if (stored === "light" || stored === "dark" || stored === "system") {
+      if (stored === "light" || stored === "dark") {
         setModeState(stored);
       }
     })();
@@ -36,10 +37,14 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     setItem(THEME_MODE_KEY, next);
   }
 
-  const isDark = mode === "system" ? systemScheme === "dark" : mode === "dark";
+  function toggle() {
+    setMode(mode === "dark" ? "light" : "dark");
+  }
+
+  const isDark = mode === "dark";
   const colors = isDark ? darkColors : lightColors;
 
-  const value = useMemo(() => ({ mode, isDark, colors, setMode }), [mode, isDark, colors]);
+  const value = useMemo(() => ({ mode, isDark, colors, setMode, toggle }), [mode, isDark, colors]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

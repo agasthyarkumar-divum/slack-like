@@ -141,6 +141,79 @@ async def test_reaction_toggles_on_and_off(client):
     assert unreact.status_code == 200  # toggled off; endpoint still succeeds
 
 
+async def test_reactions_appear_in_message_response_scoped_per_viewer(client):
+    alice, bob, channel_id = await _setup_channel_with_two_members(client)
+    message = (
+        await client.post(
+            f"/channels/{channel_id}/messages", json={"content": "funny"}, headers=auth_header(alice)
+        )
+    ).json()
+
+    reacted = await client.post(
+        f"/messages/{message['id']}/reactions", json={"emoji": "😂"}, headers=auth_header(bob)
+    )
+    assert reacted.json()["reactions"] == [{"emoji": "😂", "count": 1, "me": True}]
+
+    listed_as_alice = await client.get(f"/channels/{channel_id}/messages", headers=auth_header(alice))
+    alice_view = listed_as_alice.json()["items"][0]
+    assert alice_view["reactions"] == [{"emoji": "😂", "count": 1, "me": False}]  # alice didn't react
+
+    listed_as_bob = await client.get(f"/channels/{channel_id}/messages", headers=auth_header(bob))
+    bob_view = listed_as_bob.json()["items"][0]
+    assert bob_view["reactions"] == [{"emoji": "😂", "count": 1, "me": True}]  # bob did
+
+
+async def test_thread_replies_are_excluded_from_main_list_and_counted_on_parent(client):
+    alice, bob, channel_id = await _setup_channel_with_two_members(client)
+    parent = (
+        await client.post(
+            f"/channels/{channel_id}/messages", json={"content": "who's up for lunch?"}, headers=auth_header(alice)
+        )
+    ).json()
+
+    reply = (
+        await client.post(
+            f"/channels/{channel_id}/messages",
+            json={"content": "me!", "reply_to_id": parent["id"]},
+            headers=auth_header(bob),
+        )
+    ).json()
+    assert reply["reply_to_id"] == parent["id"]
+
+    main_list = (await client.get(f"/channels/{channel_id}/messages", headers=auth_header(alice))).json()
+    assert [m["id"] for m in main_list["items"]] == [parent["id"]]  # reply not in the main timeline
+    assert main_list["items"][0]["reply_count"] == 1
+
+    thread = (
+        await client.get(f"/messages/{parent['id']}/replies", headers=auth_header(alice))
+    ).json()
+    assert thread["parent"]["id"] == parent["id"]
+    assert thread["parent"]["reply_count"] == 1
+    assert [m["id"] for m in thread["items"]] == [reply["id"]]
+
+
+async def test_reply_to_message_in_a_different_channel_is_rejected(client):
+    alice, _bob, channel_id = await _setup_channel_with_two_members(client)
+    parent = (
+        await client.post(
+            f"/channels/{channel_id}/messages", json={"content": "hi"}, headers=auth_header(alice)
+        )
+    ).json()
+    other_channel = (
+        await client.post(
+            "/channels", json={"name": "elsewhere", "type": "public", "member_ids": []},
+            headers=auth_header(alice),
+        )
+    ).json()
+
+    response = await client.post(
+        f"/channels/{other_channel['id']}/messages",
+        json={"content": "wrong channel", "reply_to_id": parent["id"]},
+        headers=auth_header(alice),
+    )
+    assert response.status_code == 422
+
+
 async def test_pin_requires_manage_role(client):
     alice, bob, channel_id = await _setup_channel_with_two_members(client)
     message = (

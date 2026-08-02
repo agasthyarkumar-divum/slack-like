@@ -1,0 +1,107 @@
+.row {
+  position: relative;
+  display: flex;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-xl);
+}
+
+.row:hover {
+  background: var(--bg-surface);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+}
+
+.meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+
+.author {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.time,
+.edited {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.body {
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 2px;
+}
+
+.threadLink {
+  display: block;
+  margin-top: var(--space-xs);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent-moss);
+}
+
+.threadLink:hover {
+  text-decoration: underline;
+}
+
+.replyLink {
+  display: block;
+  margin-top: var(--space-xs);
+  font-size: 13px;
+  color: var(--text-secondary);
+  opacity: 0;
+}
+
+.row:hover .replyLink {
+  opacity: 1;
+}
+
+.replyLink:hover {
+  color: var(--accent-moss);
+  text-decoration: underline;
+}
+
+.hoverActions {
+  position: absolute;
+  top: 0;
+  right: var(--space-lg);
+  opacity: 0;
+}
+
+.row:hover .hoverActions {
+  opacity: 1;
+}
+
+.reactButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-hairline);
+  background: var(--bg-surface-raised);
+  color: var(--text-secondary);
+}
+
+.reactButton:hover {
+  color: var(--accent-moss);
+  border-color: var(--accent-moss);
+}
+
+.pickerAnchor {
+  position: relative;
+}
+
+.pickerAnchor > * {
+  right: 0;
+  top: var(--space-xs);
+}

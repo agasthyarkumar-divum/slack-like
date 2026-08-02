@@ -151,6 +151,52 @@ async def test_mark_read_and_mark_all_read(client):
     assert after_all["unread_count"] == 0
 
 
+async def test_notification_preference_none_suppresses_mentions_and_reactions(client):
+    alice = await register_and_login(client, "alice@example.com")
+    bob = await register_and_login(client, "bob@example.com")
+    bob_id = (await client.get("/users/me", headers=auth_header(bob))).json()["id"]
+    channel = await _make_channel(client, alice, member_ids=[bob_id])
+
+    settings = await client.patch(
+        "/users/me", json={"notification_preference": "none"}, headers=auth_header(bob)
+    )
+    assert settings.status_code == 200
+    assert settings.json()["notification_preference"] == "none"
+
+    await client.post(
+        f"/channels/{channel['id']}/messages", json={"content": "@bob hi"}, headers=auth_header(alice)
+    )
+
+    notifications = await client.get("/notifications", headers=auth_header(bob))
+    assert notifications.json()["unread_count"] == 0
+
+
+async def test_notification_preference_mentions_dms_suppresses_reactions_only(client):
+    alice = await register_and_login(client, "alice@example.com")
+    bob = await register_and_login(client, "bob@example.com")
+    bob_id = (await client.get("/users/me", headers=auth_header(bob))).json()["id"]
+    channel = await _make_channel(client, alice, member_ids=[bob_id])
+    message = (
+        await client.post(
+            f"/channels/{channel['id']}/messages", json={"content": "joke"}, headers=auth_header(alice)
+        )
+    ).json()
+
+    await client.patch(
+        "/users/me", json={"notification_preference": "mentions_dms"}, headers=auth_header(alice)
+    )
+    await client.post(f"/messages/{message['id']}/reactions", json={"emoji": "😂"}, headers=auth_header(bob))
+
+    notifications = await client.get("/notifications", headers=auth_header(alice))
+    assert notifications.json()["unread_count"] == 0  # reaction suppressed
+
+    await client.post(
+        f"/channels/{channel['id']}/messages", json={"content": "@alice still there?"}, headers=auth_header(bob)
+    )
+    notifications_after_mention = await client.get("/notifications", headers=auth_header(alice))
+    assert notifications_after_mention.json()["unread_count"] == 1  # mentions still get through
+
+
 async def test_cannot_mark_someone_elses_notification_read(client):
     alice = await register_and_login(client, "alice@example.com")
     bob = await register_and_login(client, "bob@example.com")

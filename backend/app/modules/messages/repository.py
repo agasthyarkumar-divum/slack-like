@@ -7,6 +7,8 @@ from sqlalchemy.orm import selectinload
 
 from app.db.models import ChannelMember, Message, MessageRead, Reaction
 
+MESSAGE_LOAD_OPTIONS = (selectinload(Message.attachments), selectinload(Message.reactions))
+
 
 async def create_message(
     db: AsyncSession,
@@ -39,8 +41,19 @@ async def get_message_by_id(db: AsyncSession, message_id: uuid.UUID) -> Message 
     # (e.g. just created in this same request), get() returns the cached
     # instance as-is and *skips* applying eager-load options entirely, leaving
     # `attachments` unloaded. An explicit select() always re-applies them.
+    #
+    # populate_existing=True matters whenever this is a *re-fetch* of a
+    # message whose relationships were already touched earlier in the same
+    # request (e.g. react_to_message loads it once via _require_message
+    # before toggling, then again after) — without it, selectinload silently
+    # no-ops on a relationship that's already populated (even an empty list
+    # counts as "populated"), so a collection loaded before a write stays
+    # stale instead of picking up the change.
     result = await db.execute(
-        select(Message).where(Message.id == message_id).options(selectinload(Message.attachments))
+        select(Message)
+        .where(Message.id == message_id)
+        .options(*MESSAGE_LOAD_OPTIONS)
+        .execution_options(populate_existing=True)
     )
     return result.scalar_one_or_none()
 
@@ -55,10 +68,16 @@ async def list_messages_for_channel(
     # Composite (created_at, id) DESC keyset pagination — correct even when two
     # messages share a created_at timestamp, unlike a plain `created_at < cursor`
     # cutoff. Uses the idx_messages_channel_created index (architecture.md §5).
+    # reply_to_id IS NULL excludes thread replies — those only ever surface via
+    # list_replies_for_message, never inline in the main timeline.
     query = (
         select(Message)
-        .where(Message.channel_id == channel_id, Message.is_deleted.is_(False))
-        .options(selectinload(Message.attachments))
+        .where(
+            Message.channel_id == channel_id,
+            Message.is_deleted.is_(False),
+            Message.reply_to_id.is_(None),
+        )
+        .options(*MESSAGE_LOAD_OPTIONS)
         .order_by(Message.created_at.desc(), Message.id.desc())
         .limit(limit)
     )
@@ -72,6 +91,51 @@ async def list_messages_for_channel(
         )
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def list_replies_for_message(
+    db: AsyncSession,
+    *,
+    parent_id: uuid.UUID,
+    limit: int,
+    cursor: tuple[datetime, uuid.UUID] | None,
+) -> list[Message]:
+    """Oldest-first (thread reading order), keyset-paginated forward via
+    `created_at > cursor` — the mirror image of the main list's DESC paging.
+    """
+    query = (
+        select(Message)
+        .where(Message.reply_to_id == parent_id, Message.is_deleted.is_(False))
+        .options(*MESSAGE_LOAD_OPTIONS)
+        .order_by(Message.created_at.asc(), Message.id.asc())
+        .limit(limit)
+    )
+    if cursor is not None:
+        cursor_created_at, cursor_id = cursor
+        query = query.where(
+            or_(
+                Message.created_at > cursor_created_at,
+                and_(Message.created_at == cursor_created_at, Message.id > cursor_id),
+            )
+        )
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def count_replies_for_messages(
+    db: AsyncSession, *, message_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, tuple[int, datetime | None]]:
+    """message_id -> (reply_count, last_reply_at) for a batch of (potential)
+    parent messages — one query instead of N, used to annotate MessageOut.
+    """
+    if not message_ids:
+        return {}
+    result = await db.execute(
+        select(Message.reply_to_id, func.count(Message.id), func.max(Message.created_at))
+        .where(Message.reply_to_id.in_(message_ids), Message.is_deleted.is_(False))
+        .group_by(Message.reply_to_id)
+    )
+    return {row[0]: (row[1], row[2]) for row in result.all()}
 
 
 async def toggle_reaction(

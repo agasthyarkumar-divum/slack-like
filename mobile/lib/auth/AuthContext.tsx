@@ -3,7 +3,7 @@ import type { PropsWithChildren } from "react";
 
 import { api } from "@/lib/api/client";
 import { tokenStorage } from "@/lib/api/tokenStorage";
-import type { Scope } from "@/lib/api/types";
+import type { NotificationPreference, Scope } from "@/lib/api/types";
 
 type AuthUser = {
   id: string;
@@ -11,6 +11,7 @@ type AuthUser = {
   display_name: string;
   avatar_uri: string | null;
   status: string | null;
+  notification_preference: NotificationPreference;
 };
 
 type AuthContextValue = {
@@ -23,6 +24,7 @@ type AuthContextValue = {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -77,7 +79,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const isSuperAdmin = scope === "superAdmin";
 
   const value = useMemo(
-    () => ({ user, scope, isAdmin, isSuperAdmin, isLoading, login, logout }),
+    () => ({ user, scope, isAdmin, isSuperAdmin, isLoading, login, logout, refreshUser: loadCurrentUser }),
     [user, scope, isAdmin, isSuperAdmin, isLoading]
   );
 

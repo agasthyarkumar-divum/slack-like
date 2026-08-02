@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useNavigation } from "expo-router";
-import { Send } from "lucide-react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Menu, Moon, Search, Send, Settings, Sun } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -13,9 +13,12 @@ import {
   View,
 } from "react-native";
 
+import { ChannelList } from "@/components/ChannelList";
+import { Drawer } from "@/components/Drawer";
+import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { MessageBubble } from "@/components/MessageBubble";
 import { getChannel, listMembers } from "@/lib/api/channels";
-import { listMessages, sendMessage } from "@/lib/api/messages";
+import { listMessages, sendMessage, toggleReaction } from "@/lib/api/messages";
 import type { Channel, Message } from "@/lib/api/types";
 import { useUserName } from "@/lib/api/userDirectory";
 import { useAuth } from "@/lib/auth/AuthContext";
@@ -53,11 +56,19 @@ function MessageRow({
   isMine,
   showSenderName,
   deliveryStatus,
+  pickerOpenFor,
+  onTogglePicker,
+  onToggleReaction,
+  onOpenThread,
 }: {
   item: Message;
   isMine: boolean;
   showSenderName: boolean;
   deliveryStatus: "sent" | "delivered" | "seen" | undefined;
+  pickerOpenFor: string | null;
+  onTogglePicker: (messageId: string) => void;
+  onToggleReaction: (messageId: string, emoji: string) => void;
+  onOpenThread: (message: Message) => void;
 }) {
   const senderName = useUserName(showSenderName ? item.sender_id : null);
   return (
@@ -69,15 +80,21 @@ function MessageRow({
       hasAttachment={item.attachment_ids.length > 0}
       senderName={showSenderName ? senderName : undefined}
       deliveryStatus={deliveryStatus}
+      reactions={item.reactions}
+      onToggleReaction={(emoji) => onToggleReaction(item.id, emoji)}
+      isPickerOpen={pickerOpenFor === item.id}
+      onTogglePicker={() => onTogglePicker(item.id)}
+      replyCount={item.reply_count}
+      onOpenThread={() => onOpenThread(item)}
     />
   );
 }
 
 export default function ChatScreen() {
   const { id: channelId } = useLocalSearchParams<{ id: string }>();
-  const navigation = useNavigation();
+  const router = useRouter();
   const { user } = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDark, toggle } = useTheme();
   const { subscribe, send } = useWS();
 
   const [channel, setChannel] = useState<Channel | null>(null);
@@ -91,6 +108,8 @@ export default function ChatScreen() {
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
   const [seenUpToTimestamp, setSeenUpToTimestamp] = useState<string | null>(null);
   const [deliveredUpToTimestamp, setDeliveredUpToTimestamp] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
 
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const lastTypingSentAtRef = useRef(0);
@@ -101,6 +120,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (!channelId) return;
+    setPickerOpenFor(null);
     (async () => {
       const [channelData, messagesData] = await Promise.all([
         getChannel(channelId),
@@ -111,20 +131,12 @@ export default function ChatScreen() {
         const members = await listMembers(channelId);
         const other = members.find((m) => m.user_id !== user?.id);
         if (other) setDmOtherUserId(other.user_id);
-      } else {
-        navigation.setOptions({ title: `#${channelData.name}` });
       }
       setMessages(messagesData.items);
       setNextCursor(messagesData.next_cursor);
       setIsLoading(false);
     })();
-  }, [channelId, navigation, user?.id]);
-
-  useEffect(() => {
-    if (channel?.type === "dm" && dmOtherName) {
-      navigation.setOptions({ title: dmOtherName });
-    }
-  }, [channel?.type, dmOtherName, navigation]);
+  }, [channelId, user?.id]);
 
   useEffect(() => {
     if (!channelId) return undefined;
@@ -153,6 +165,39 @@ export default function ChatScreen() {
     const unsubDeleted = subscribe("message.deleted", (data) => {
       if (data.channel_id !== channelId) return;
       setMessages((prev) => prev.filter((m) => m.id !== data.id));
+    });
+    const unsubThreadReply = subscribe("thread.reply.new", (data) => {
+      if (data.channel_id !== channelId) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === data.parent_id
+            ? { ...m, reply_count: m.reply_count + 1, last_reply_at: data.created_at as string }
+            : m
+        )
+      );
+    });
+    const unsubReaction = subscribe("message.reaction", (data) => {
+      if (data.channel_id !== channelId) return;
+      const totals = data.reactions as { emoji: string; count: number }[];
+      const changedEmoji = data.emoji as string;
+      const changedByMe = data.user_id === user?.id;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === data.id
+            ? {
+                ...m,
+                reactions: totals.map((t) => ({
+                  emoji: t.emoji,
+                  count: t.count,
+                  me:
+                    t.emoji === changedEmoji && changedByMe
+                      ? (data.added as boolean)
+                      : m.reactions.find((r) => r.emoji === t.emoji)?.me ?? false,
+                })),
+              }
+            : m
+        )
+      );
     });
     const unsubTypingStart = subscribe("typing.start", (data) => {
       if (data.channel_id !== channelId || data.user_id === user?.id) return;
@@ -197,11 +242,13 @@ export default function ChatScreen() {
       unsubDelivered();
       unsubEdited();
       unsubDeleted();
+      unsubThreadReply();
+      unsubReaction();
       unsubTypingStart();
       unsubTypingStop();
       unsubRead();
     };
-  }, [channelId, subscribe, user?.id]);
+  }, [channelId, subscribe, send, user?.id]);
 
   // Mark the newest message read whenever it changes, as long as it's not ours.
   const newestMessageId = messages[0]?.id;
@@ -250,6 +297,17 @@ export default function ChatScreen() {
     }
   }
 
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    setPickerOpenFor(null);
+    const updated = await toggleReaction(messageId, emoji);
+    setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+  }
+
+  function handleOpenThread(message: Message) {
+    if (!channelId) return;
+    router.push(`/channel/${channelId}/thread/${message.id}`);
+  }
+
   if (isLoading || !channel) {
     return (
       <View style={[styles.center, { backgroundColor: colors.bgBase }]}>
@@ -259,6 +317,9 @@ export default function ChatScreen() {
   }
 
   const latestMineMessageId = messages.find((m) => m.sender_id === user?.id)?.id;
+  const isDm = channel.type === "dm";
+  const title = isDm ? dmOtherName || "Direct message" : `#${channel.name}`;
+  const subtitle = isDm ? "Direct message" : channel.topic || "No topic set.";
 
   return (
     <KeyboardAvoidingView
@@ -266,6 +327,29 @@ export default function ChatScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
+      <View style={[styles.header, { backgroundColor: colors.bgSurfaceRaised, borderBottomColor: colors.borderHairline }]}>
+        <HeaderIconButton accessibilityLabel="Open channels" onPress={() => setDrawerOpen(true)}>
+          <Menu size={20} color={colors.textSecondary} strokeWidth={1.5} />
+        </HeaderIconButton>
+        <View style={styles.headerText}>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        </View>
+        <HeaderIconButton accessibilityLabel="Toggle theme" onPress={toggle}>
+          {isDark ? <Sun size={18} color={colors.textSecondary} strokeWidth={1.5} /> : <Moon size={18} color={colors.textSecondary} strokeWidth={1.5} />}
+        </HeaderIconButton>
+        <HeaderIconButton accessibilityLabel="Search" onPress={() => router.push("/search")}>
+          <Search size={18} color={colors.textSecondary} strokeWidth={1.5} />
+        </HeaderIconButton>
+        <HeaderIconButton accessibilityLabel="Settings" onPress={() => router.push("/settings")}>
+          <Settings size={18} color={colors.textSecondary} strokeWidth={1.5} />
+        </HeaderIconButton>
+      </View>
+
       <FlatList
         style={styles.flex}
         data={messages}
@@ -295,6 +379,10 @@ export default function ChatScreen() {
               isMine={isMine}
               showSenderName={!isMine && channel.type !== "dm"}
               deliveryStatus={deliveryStatus}
+              pickerOpenFor={pickerOpenFor}
+              onTogglePicker={(id) => setPickerOpenFor((prev) => (prev === id ? null : id))}
+              onToggleReaction={handleToggleReaction}
+              onOpenThread={handleOpenThread}
             />
           );
         }}
@@ -327,6 +415,16 @@ export default function ChatScreen() {
           {isSending ? <ActivityIndicator size="small" color="#FFF" /> : <Send size={18} color="#FFF" strokeWidth={1.5} />}
         </Pressable>
       </View>
+
+      <Drawer visible={drawerOpen} onClose={() => setDrawerOpen(false)}>
+        <ChannelList
+          activeChannelId={channelId}
+          onSelect={(next) => {
+            setDrawerOpen(false);
+            if (next.id !== channelId) router.replace(`/channel/${next.id}`);
+          }}
+        />
+      </Drawer>
     </KeyboardAvoidingView>
   );
 }
@@ -334,6 +432,16 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+  },
+  headerText: { flex: 1, marginLeft: spacing.xs },
+  headerTitle: { fontFamily: fonts.display, fontSize: 17, fontWeight: "600" },
+  headerSubtitle: { fontFamily: fonts.body, fontSize: 12 },
   listContent: { paddingVertical: spacing.md },
   loadingMore: { marginVertical: spacing.md },
   emptyContainer: {

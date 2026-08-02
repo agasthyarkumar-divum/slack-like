@@ -8,7 +8,8 @@ for the realtime wire protocol.
 ```
 divum-chat/
 ├── backend/     FastAPI + PostgreSQL + Redis + Celery
-├── mobile/      Expo Router app (TypeScript)
+├── mobile/      Expo Router app (TypeScript) — mobile layout, also runs as mobile-web
+├── web/         Vite + React app (TypeScript) — desktop layout
 ├── docs/        architecture.md, websocket-events.md, getting-started.md
 ├── Makefile     shortcuts for everything below
 └── docker-compose.yml
@@ -19,6 +20,7 @@ divum-chat/
 ```bash
 make up          # backend: build + start postgres, redis, api, worker (Docker)
 make mobile        # mobile: install deps + start the Expo dev server
+make web          # web: install deps + start the Vite dev server (desktop layout)
 ```
 
 API at `http://localhost:8000` (`/docs` for Swagger, `/redoc` for ReDoc, `/health`
@@ -32,6 +34,7 @@ for a liveness check). `make help` lists every target with its description.
 | `make backend-dev` | API on the host with `--reload`; auto-stops the Docker `api` container first so the port-8000 collision you hit can't happen again |
 | `make migrate` / `make migration m="..."` | Alembic — apply migrations / autogenerate a new one |
 | `make mobile` / `make mobile-web` / `make mobile-android` / `make mobile-ios` | Start the Expo dev server (default / web / Android / iOS) — always `cd`s into `mobile/` for you, so wrong-directory mistakes can't happen via `make` |
+| `make web` / `make web-build` / `make web-typecheck` | Desktop web app — start the Vite dev server, production-build to `web/dist`, or just type-check |
 | `make test` | Run the backend test suite against a real Postgres (`company_chat_test`, auto-created on the `db` container) |
 | `make seed` | Create a few dev accounts (same password) + a shared channel, so you can log in as different people and chat with yourself — `make seed n=8 password=...` to customize |
 | `make clean-ports` | Kills anything stray on Expo's ports (8081/8082/19000-19002) without touching Docker's ports |

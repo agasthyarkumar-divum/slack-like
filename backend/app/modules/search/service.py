@@ -50,7 +50,7 @@ async def search_messages(
             Message.is_deleted.is_(False),
             Message.search_vector.op("@@")(tsquery),
         )
-        .options(selectinload(Message.attachments))
+        .options(selectinload(Message.attachments), selectinload(Message.reactions))
         .order_by(rank.desc())
         .limit(_clamp(limit))
     )

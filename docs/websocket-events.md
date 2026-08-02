@@ -27,9 +27,11 @@ All events on the wire share this envelope:
 
 | Event | Direction | Description |
 |---|---|---|
-| `message.new` | server → client | A new message was posted to a channel the client is a member of |
+| `message.new` | server → client | A new top-level message was posted to a channel the client is a member of (thread replies use `thread.reply.new` instead — see below) |
 | `message.edited` | server → client | An existing message's content changed |
 | `message.deleted` | server → client | A message was soft-deleted |
+| `thread.reply.new` | server → client | A reply was posted in a message's thread |
+| `message.reaction` | server → client | A message's reactions changed (toggle add/remove) |
 | `typing.start` | client → server → broadcast | Client started typing in a channel |
 | `typing.stop` | client → server → broadcast | Client stopped typing (or composer cleared/blurred) |
 | `presence.update` | server → client | A user's online/away/offline status or `last_seen` changed |
@@ -55,10 +57,73 @@ All events on the wire share this envelope:
     "is_pinned": false,
     "is_edited": false,
     "created_at": "2026-07-31T09:12:03.512Z",
-    "attachment_ids": []
+    "attachment_ids": [],
+    "reactions": [],
+    "reply_count": 0,
+    "last_reply_at": null
   }
 }
 ```
+
+Only sent for top-level messages (`reply_to_id` always `null` here) — a
+message posted as a reply broadcasts `thread.reply.new` instead, since
+`GET /channels/{id}/messages` excludes replies from the main timeline (they
+only ever appear via `GET /messages/{id}/replies` / the thread panel).
+
+### `thread.reply.new` (server → client)
+
+Same shape as `message.new`, plus `parent_id` (redundant with `reply_to_id`,
+included at the top level so a client can filter without inspecting `data.reply_to_id`):
+
+```json
+{
+  "event": "thread.reply.new",
+  "data": {
+    "parent_id": "b3f1c2b0-...-uuid",
+    "id": "c4a2d3c1-...-uuid",
+    "channel_id": "a1e4...-uuid",
+    "sender_id": "9c2d...-uuid",
+    "content": "sounds good",
+    "reply_to_id": "b3f1c2b0-...-uuid",
+    "forwarded_from_id": null,
+    "is_pinned": false,
+    "is_edited": false,
+    "created_at": "2026-07-31T09:13:10.000Z",
+    "attachment_ids": [],
+    "reactions": [],
+    "reply_count": 0,
+    "last_reply_at": null
+  }
+}
+```
+
+A client should use this to update an open thread panel's reply list *and*
+the parent message's "N replies" label in the main timeline, if visible.
+
+### `message.reaction` (server → client)
+
+```json
+{
+  "event": "message.reaction",
+  "data": {
+    "id": "b3f1c2b0-...-uuid",
+    "channel_id": "a1e4...-uuid",
+    "user_id": "9c2d...-uuid",
+    "emoji": "👍",
+    "added": true,
+    "reactions": [{ "emoji": "👍", "count": 2 }]
+  }
+}
+```
+
+`reactions` is the authoritative emoji→count totals for the message — apply
+it wholesale to update pill counts. It deliberately omits each viewer's own
+`me` flag (that's only meaningful from one user's perspective, whereas this
+event fans out to every channel member) — a client should flip its own `me`
+for `emoji` only when `user_id` matches its own id, and leave every other
+emoji's `me` untouched. The REST `MessageOut.reactions` (from
+`GET /channels/{id}/messages` etc.) already includes `me` per the requesting
+user, computed server-side.
 
 ### `message.edited` (server → client)
 

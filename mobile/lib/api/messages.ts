@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { Message, MessageListResponse } from "@/lib/api/types";
+import type { Message, MessageListResponse, ThreadRepliesResponse } from "@/lib/api/types";
 
 export async function listMessages(
   channelId: string,
@@ -31,6 +31,13 @@ export async function deleteMessage(messageId: string): Promise<Message> {
 
 export async function toggleReaction(messageId: string, emoji: string): Promise<Message> {
   const { data } = await api.post<Message>(`/messages/${messageId}/reactions`, { emoji });
+  return data;
+}
+
+export async function listReplies(messageId: string, cursor?: string | null): Promise<ThreadRepliesResponse> {
+  const { data } = await api.get<ThreadRepliesResponse>(`/messages/${messageId}/replies`, {
+    params: cursor ? { cursor } : undefined,
+  });
   return data;
 }
 

@@ -36,7 +36,11 @@ async def search(
 ) -> SearchResponse:
     if type == "messages":
         results = await service.search_messages(db, user_id=current_user.id, query=q, limit=limit)
-        return SearchResponse(type=type, query=q, messages=[MessageOut.from_message(m) for m in results])
+        return SearchResponse(
+            type=type,
+            query=q,
+            messages=[MessageOut.from_message(m, current_user_id=current_user.id) for m in results],
+        )
     if type == "users":
         results = await service.search_users(db, query=q, limit=limit)
         return SearchResponse(type=type, query=q, users=[UserOut.model_validate(u) for u in results])

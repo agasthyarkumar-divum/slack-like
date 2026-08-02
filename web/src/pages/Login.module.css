@@ -1,0 +1,75 @@
+.container {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-base);
+  padding: var(--space-xl);
+}
+
+.card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  text-align: center;
+  margin: 0;
+}
+
+.tagline {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0 0 var(--space-sm);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.field input {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 15px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  outline: none;
+}
+
+.field input:focus {
+  border-color: var(--accent-moss);
+}
+
+.error {
+  font-size: 13px;
+  color: var(--state-error);
+  text-align: center;
+  margin: 0;
+}
+
+.submit {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent-moss);
+  border-radius: var(--radius-md);
+}
+
+.submit:disabled {
+  opacity: 0.6;
+}

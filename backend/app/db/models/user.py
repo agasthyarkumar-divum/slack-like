@@ -25,6 +25,9 @@ class User(UUIDPKMixin, Base):
     status: Mapped[str | None] = mapped_column(String(20), server_default="offline")
     last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool | None] = mapped_column(Boolean, server_default="true")
+    # 'all' | 'mentions_dms' | 'none' — read by notifications/service.notify_user
+    # before creating a Notification row (Settings screen's radio group).
+    notification_preference: Mapped[str | None] = mapped_column(String(20), server_default="all")
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

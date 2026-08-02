@@ -4,6 +4,7 @@
 SHELL := /bin/bash
 BACKEND_DIR := backend
 MOBILE_DIR := mobile
+WEB_DIR := web
 VENV := $(BACKEND_DIR)/.venv
 
 .DEFAULT_GOAL := help
@@ -13,6 +14,7 @@ VENV := $(BACKEND_DIR)/.venv
 	up down restart logs ps rebuild \
 	venv backend-dev migrate migration db-shell test seed \
 	mobile-install mobile mobile-web mobile-android mobile-ios typecheck \
+	web-install web web-build web-typecheck \
 	clean-ports clean
 
 help: ## Show this list of targets
@@ -98,6 +100,21 @@ mobile-ios: mobile-install ## Start Expo targeting an iOS simulator/device
 
 typecheck: ## Type-check the mobile app
 	cd $(MOBILE_DIR) && npx tsc --noEmit
+
+## --- Web (Vite, desktop layout) ---
+
+web-install: ## Install web dependencies
+	cd $(WEB_DIR) && npm install
+
+web: web-install ## Start the Vite dev server for the desktop web app
+	[ -f $(WEB_DIR)/.env ] || cp $(WEB_DIR)/.env.example $(WEB_DIR)/.env
+	cd $(WEB_DIR) && npm run dev
+
+web-build: web-install ## Type-check and production-build the web app (output in web/dist)
+	cd $(WEB_DIR) && npm run build
+
+web-typecheck: web-install ## Type-check the web app without building
+	cd $(WEB_DIR) && npx tsc -b
 
 ## --- Cleanup ---
 

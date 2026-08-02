@@ -1,0 +1,18 @@
+.image {
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--accent-moss-soft);
+}
+
+.initials {
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--accent-moss);
+}

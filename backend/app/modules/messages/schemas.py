@@ -1,4 +1,5 @@
 import uuid
+from collections import Counter
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -20,6 +21,12 @@ class MessageUpdate(BaseModel):
     content: str = Field(..., min_length=1)
 
 
+class ReactionSummary(BaseModel):
+    emoji: str
+    count: int
+    me: bool = Field(..., description="Whether the requesting user is one of the reactors.")
+
+
 class MessageOut(BaseModel):
     id: uuid.UUID
     channel_id: uuid.UUID | None
@@ -33,9 +40,25 @@ class MessageOut(BaseModel):
     created_at: datetime | None
     edited_at: datetime | None
     attachment_ids: list[uuid.UUID] = Field(default_factory=list)
+    reactions: list[ReactionSummary] = Field(default_factory=list)
+    reply_count: int = Field(0, description="Number of thread replies to this message.")
+    last_reply_at: datetime | None = Field(None, description="Newest reply's created_at, if any.")
 
     @classmethod
-    def from_message(cls, message: Message) -> "MessageOut":
+    def from_message(
+        cls,
+        message: Message,
+        *,
+        current_user_id: uuid.UUID | None = None,
+        reply_count: int = 0,
+        last_reply_at: datetime | None = None,
+    ) -> "MessageOut":
+        emoji_counts = Counter(r.emoji for r in message.reactions)
+        mine = {r.emoji for r in message.reactions if r.user_id == current_user_id}
+        reactions = [
+            ReactionSummary(emoji=emoji, count=count, me=emoji in mine)
+            for emoji, count in emoji_counts.items()
+        ]
         return cls(
             id=message.id,
             channel_id=message.channel_id,
@@ -49,6 +72,9 @@ class MessageOut(BaseModel):
             created_at=message.created_at,
             edited_at=message.edited_at,
             attachment_ids=[a.id for a in message.attachments],
+            reactions=reactions,
+            reply_count=reply_count,
+            last_reply_at=last_reply_at,
         )
 
 
@@ -56,6 +82,14 @@ class MessageListResponse(BaseModel):
     items: list[MessageOut]
     next_cursor: str | None = Field(
         None, description="Pass as ?cursor= to fetch the next (older) page; null if no more."
+    )
+
+
+class ThreadRepliesResponse(BaseModel):
+    parent: MessageOut
+    items: list[MessageOut] = Field(..., description="Replies, oldest first.")
+    next_cursor: str | None = Field(
+        None, description="Pass as ?cursor= to fetch the next (newer) page; null if no more."
     )
 
 

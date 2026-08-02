@@ -87,6 +87,7 @@ export default function SearchScreen() {
           { backgroundColor: colors.bgSurface, color: colors.textPrimary, borderColor: colors.borderHairline },
         ]}
         autoCapitalize="none"
+        autoFocus
       />
 
       <View style={styles.tabRow}>

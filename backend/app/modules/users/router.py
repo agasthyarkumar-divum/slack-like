@@ -7,7 +7,7 @@ from app.db.base import get_db
 from app.db.models import User
 from app.modules.auth import repository as auth_repository
 from app.modules.auth.dependencies import get_current_user
-from app.modules.users.schemas import UserOut
+from app.modules.users.schemas import UserOut, UserSettingsUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -21,6 +21,26 @@ router = APIRouter(prefix="/users", tags=["users"])
     responses={401: {"description": "Missing, invalid, or expired access token."}},
 )
 async def get_me(current_user: User = Depends(get_current_user)) -> User:
+    return current_user
+
+
+@router.patch(
+    "/me",
+    response_model=UserOut,
+    summary="Update the current user's settings",
+    description="Currently just the notification preference (Settings screen's "
+    "radio group) — profile fields aren't editable via this endpoint.",
+    responses={401: {"description": "Missing, invalid, or expired access token."}},
+)
+async def update_me(
+    payload: UserSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> User:
+    current_user.notification_preference = payload.notification_preference
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
 
 

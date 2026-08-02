@@ -22,15 +22,17 @@ import { WSProvider } from "@/lib/ws/WSContext";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+const PUBLIC_PATHS = new Set(["/workspace", "/login"]);
+
 function AuthGate({ children }: PropsWithChildren) {
   const { user, isLoading } = useAuth();
   const pathname = usePathname();
 
   if (isLoading) return null;
 
-  const isOnLoginScreen = pathname === "/login";
-  if (!user && !isOnLoginScreen) return <Redirect href="/login" />;
-  if (user && isOnLoginScreen) return <Redirect href="/" />;
+  const onPublicPath = PUBLIC_PATHS.has(pathname);
+  if (!user && !onPublicPath) return <Redirect href="/workspace" />;
+  if (user && onPublicPath) return <Redirect href="/" />;
 
   return <>{children}</>;
 }
@@ -48,9 +50,14 @@ function ThemedStack() {
         contentStyle: { backgroundColor: colors.bgBase },
       }}
     >
+      <Stack.Screen name="workspace" />
       <Stack.Screen name="login" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="channel/[id]" options={{ headerShown: true, title: "" }} />
+      <Stack.Screen name="index" />
+      <Stack.Screen name="channel/[id]" />
+      <Stack.Screen name="channel/[id]/thread/[messageId]" options={{ headerShown: true, title: "" }} />
+      <Stack.Screen name="search" options={{ headerShown: true, title: "" }} />
+      <Stack.Screen name="notifications" options={{ headerShown: true, title: "" }} />
+      <Stack.Screen name="profile" options={{ headerShown: true, title: "" }} />
       <Stack.Screen name="settings" options={{ headerShown: true, title: "Settings" }} />
       <Stack.Screen name="admin" options={{ headerShown: true, title: "Admin Dashboard" }} />
     </Stack>
