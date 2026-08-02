@@ -29,12 +29,14 @@ env: ## Copy .env.example -> .env if .env doesn't exist yet
 
 up: env ## Build and start the full backend stack in the background
 	docker-compose up -d --build
+	$(MAKE) migrate
 
 down: ## Stop the backend stack (keeps volumes: db data, uploads)
 	docker-compose down
 
 restart: ## Restart the api and worker containers (e.g. after a dependency change)
 	docker-compose up -d --build api worker
+	$(MAKE) migrate
 
 logs: ## Tail API logs (Ctrl+C to stop tailing, containers keep running)
 	docker-compose logs -f api
@@ -54,7 +56,7 @@ venv: ## Create backend/.venv and install Python dependencies
 	$(VENV)/bin/pip install --quiet --upgrade pip
 	$(VENV)/bin/pip install --quiet -r $(BACKEND_DIR)/requirements.txt
 
-backend-dev: venv ## Run the API on the host with --reload (db/redis via Docker, api container stopped)
+backend-dev: venv migrate ## Run the API on the host with --reload (db/redis via Docker, api container stopped)
 	docker-compose up -d db redis
 	docker-compose stop api 2>/dev/null || true
 	[ -f $(BACKEND_DIR)/.env ] || cp $(BACKEND_DIR)/.env.example $(BACKEND_DIR)/.env
@@ -62,6 +64,7 @@ backend-dev: venv ## Run the API on the host with --reload (db/redis via Docker,
 
 migrate: venv ## Apply Alembic migrations (upgrade head)
 	docker-compose up -d db
+	[ -f $(BACKEND_DIR)/.env ] || cp $(BACKEND_DIR)/.env.example $(BACKEND_DIR)/.env
 	cd $(BACKEND_DIR) && source .venv/bin/activate && alembic upgrade head
 
 migration: venv ## Autogenerate a new migration: make migration m="add users table"
@@ -76,8 +79,17 @@ test: venv ## Run the backend test suite (needs a real Postgres — creates a *_
 	docker-compose up -d db
 	cd $(BACKEND_DIR) && source .venv/bin/activate && pytest
 
-seed: venv ## Seed N dev users (same password) + a shared channel: make seed [n=5] [password=...]
+seed: venv migrate ## Seed N dev users (same password) + a shared channel: make seed [n=5] [password=...]
 	$(VENV)/bin/pip install --quiet httpx
+	@if ! curl -sf http://localhost:$${API_PORT:-8000}/health >/dev/null 2>&1; then \
+		echo "No API reachable on localhost:$${API_PORT:-8000} — starting the backend stack (make up)..."; \
+		$(MAKE) up; \
+		echo "Waiting for the API to become healthy..."; \
+		for i in $$(seq 1 30); do \
+			curl -sf http://localhost:$${API_PORT:-8000}/health >/dev/null 2>&1 && break; \
+			sleep 1; \
+		done; \
+	fi
 	cd $(BACKEND_DIR) && source .venv/bin/activate && python scripts/seed_dev_users.py \
 		--count $(or $(n),5) --password $(or $(password),chatchatchat)
 
