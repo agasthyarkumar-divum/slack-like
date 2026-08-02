@@ -26,6 +26,10 @@ async def get_role_by_name(db: AsyncSession, name: str) -> Role | None:
     return result.scalar_one_or_none()
 
 
+async def get_role_by_id(db: AsyncSession, role_id: uuid.UUID) -> Role | None:
+    return await db.get(Role, role_id)
+
+
 async def create_user(
     db: AsyncSession,
     *,

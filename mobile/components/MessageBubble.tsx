@@ -4,7 +4,7 @@ import { ImageBackground, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "@/lib/theme/ThemeContext";
 import { fonts, radii, spacing } from "@/lib/theme/tokens";
 
-type DeliveryStatus = "sent" | "seen";
+type DeliveryStatus = "sent" | "delivered" | "seen";
 
 type MessageBubbleProps = {
   content: string | null;
@@ -59,6 +59,8 @@ export function MessageBubble({
           {isEdited ? " · edited" : ""}
         </Text>
         {deliveryStatus === "seen" ? (
+          <CheckCheck size={13} color={isMine ? "#FFFFFF" : colors.accentMoss} strokeWidth={2} />
+        ) : deliveryStatus === "delivered" ? (
           <CheckCheck size={13} color={metaColor} strokeWidth={2} />
         ) : deliveryStatus === "sent" ? (
           <Check size={13} color={metaColor} strokeWidth={2} />

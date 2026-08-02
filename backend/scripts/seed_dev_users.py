@@ -13,11 +13,57 @@ Usage:
 """
 
 import argparse
+import asyncio
+import os
 import sys
 
 import httpx
 
+# Let `python scripts/seed_dev_users.py` (run from backend/) import the `app`
+# package below — scripts/ itself isn't on sys.path by default.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 DEFAULT_NAMES = ["Alice", "Bob", "Carol", "Dave", "Erin", "Frank", "Grace", "Heidi", "Ivan", "Judy"]
+
+# The first two seeded accounts double as standing admin/superAdmin fixtures
+# for local dev — there's no HTTP path to mint the very first admin (the
+# admin API itself requires an existing admin to call it), so this reaches
+# around it with a direct DB write.
+ROLE_PROMOTIONS = {"Alice": "superAdmin", "Bob": "admin"}
+
+
+async def _promote_roles(promotions: dict[str, str]) -> None:
+    """promotions: {email: scope_name}. Ensures the three canonical roles
+    exist, then sets each user's role_id directly."""
+    from sqlalchemy import select, update
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.core.config import settings
+    from app.db.models import Role, User
+
+    # A dedicated echo=False engine, not app.db.base's — that one echoes SQL
+    # whenever APP_ENV=development, which is exactly this script's env.
+    engine = create_async_engine(settings.DATABASE_URL, echo=False)
+    SessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+
+    try:
+        async with SessionLocal() as db:
+            role_ids: dict[str, object] = {}
+            for name in ("users", "admin", "superAdmin"):
+                result = await db.execute(select(Role).where(Role.name == name))
+                role = result.scalar_one_or_none()
+                if role is None:
+                    role = Role(name=name)
+                    db.add(role)
+                    await db.flush()
+                role_ids[name] = role.id
+            await db.commit()
+
+            for email, scope in promotions.items():
+                await db.execute(update(User).where(User.email == email).values(role_id=role_ids[scope]))
+            await db.commit()
+    finally:
+        await engine.dispose()
 
 
 def main() -> None:
@@ -104,10 +150,18 @@ def main() -> None:
         if resp.status_code not in (201, 409):
             print(f"  WARNING: couldn't add {email} to #{args.channel}: {resp.status_code} {resp.text}", file=sys.stderr)
 
+    promotions = {
+        email: ROLE_PROMOTIONS[name] for email, name in accounts if name in ROLE_PROMOTIONS
+    }
+    if promotions:
+        asyncio.run(_promote_roles(promotions))
+
+    scopes = {name: ROLE_PROMOTIONS.get(name, "users") for _email, name in accounts}
+
     print("\n--- accounts (same password for all) ---")
-    print(f"{'name':<8} {'email':<28} password")
+    print(f"{'name':<8} {'email':<28} {'scope':<11} password")
     for email, name in accounts:
-        print(f"{name:<8} {email:<28} {args.password}")
+        print(f"{name:<8} {email:<28} {scopes[name]:<11} {args.password}")
     print(f"\nShared channel: #{args.channel}")
     print("\nLog in as any of these on as many tabs/devices as you like — they're all in the same channel.")
 

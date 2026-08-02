@@ -74,6 +74,37 @@ export type NotificationListResponse = {
   unread_count: number;
 };
 
+export type Scope = "users" | "admin" | "superAdmin";
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  display_name: string;
+  is_active: boolean | null;
+  scope: Scope;
+  department_id: string | null;
+  team_id: string | null;
+  created_at: string | null;
+};
+
+export type AuditLogEntry = {
+  id: string;
+  actor_id: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  extra_data: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type AdminStats = {
+  total_users: number;
+  active_users: number;
+  total_channels: number;
+  total_messages: number;
+  users_active_today: number;
+};
+
 export type SearchType = "messages" | "users" | "channels" | "files";
 
 export type SearchResponse = {

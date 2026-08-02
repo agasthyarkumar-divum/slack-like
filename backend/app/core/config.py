@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     APP_NAME: str = "Company Chat"
     APP_VERSION: str = "0.1.0"
     APP_ENV: str = "development"  # development | staging | production
+    # Static identifier for *this* deployment/application, distinct from a
+    # per-request user id — echoed on the X-App-Id response header and in JWT
+    # claims. Matters once multiple client apps or tenants share one backend;
+    # today there's exactly one, but callers shouldn't have to hardcode that.
+    APP_ID: str = "company-chat"
 
     # Generic company-facing identifiers, kept out of code/identifiers elsewhere
     # and sourced only from here (see kickoff note: no hardcoded product-name

@@ -97,6 +97,22 @@ async def _handle_client_event(user_id: uuid.UUID, raw: dict) -> None:
         )
         return
 
+    if event == "message.delivered":
+        # Ephemeral, no DB persistence (unlike read_receipt.update) — this is
+        # just "your socket received the push", not something that needs to
+        # survive a reconnect or show up in history. The client supplies
+        # channel_id itself (it just got it on the message.new this acks),
+        # sparing a DB lookup here.
+        message_id = data.get("message_id")
+        channel_id = data.get("channel_id")
+        if not message_id or not channel_id:
+            return
+        await manager.broadcast_to_channel(
+            channel_id,
+            {"event": "message.delivered", "data": {"message_id": message_id, "user_id": str(user_id)}},
+        )
+        return
+
     if event == "read_receipt.update":
         raw_message_id = data.get("message_id")
         if not raw_message_id:

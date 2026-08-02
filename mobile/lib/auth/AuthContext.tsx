@@ -3,6 +3,7 @@ import type { PropsWithChildren } from "react";
 
 import { api } from "@/lib/api/client";
 import { tokenStorage } from "@/lib/api/tokenStorage";
+import type { Scope } from "@/lib/api/types";
 
 type AuthUser = {
   id: string;
@@ -14,6 +15,11 @@ type AuthUser = {
 
 type AuthContextValue = {
   user: AuthUser | null;
+  /** From the X-Scope response header (a token claim, not part of the user
+   * body) — defaults to 'users' until the first authenticated response lands. */
+  scope: Scope;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -23,14 +29,17 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [scope, setScope] = useState<Scope>("users");
   const [isLoading, setIsLoading] = useState(true);
 
   async function loadCurrentUser() {
     try {
       const response = await api.get<AuthUser>("/users/me");
       setUser(response.data);
+      setScope((response.headers["x-scope"] as Scope | undefined) ?? "users");
     } catch {
       setUser(null);
+      setScope("users");
     }
   }
 
@@ -61,9 +70,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
     await tokenStorage.clear();
     setUser(null);
+    setScope("users");
   }
 
-  const value = useMemo(() => ({ user, isLoading, login, logout }), [user, isLoading]);
+  const isAdmin = scope === "admin" || scope === "superAdmin";
+  const isSuperAdmin = scope === "superAdmin";
+
+  const value = useMemo(
+    () => ({ user, scope, isAdmin, isSuperAdmin, isLoading, login, logout }),
+    [user, scope, isAdmin, isSuperAdmin, isLoading]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

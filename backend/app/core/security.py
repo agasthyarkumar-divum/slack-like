@@ -30,7 +30,9 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
 
-def _create_token(subject: str, token_type: TokenType, expires_delta: timedelta) -> str:
+def _create_token(
+    subject: str, token_type: TokenType, expires_delta: timedelta, *, extra_claims: dict | None = None
+) -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": subject,
@@ -38,13 +40,22 @@ def _create_token(subject: str, token_type: TokenType, expires_delta: timedelta)
         "iat": now,
         "exp": now + expires_delta,
         "jti": str(uuid.uuid4()),
+        "app_id": settings.APP_ID,
+        **(extra_claims or {}),
     }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-def create_access_token(user_id: uuid.UUID) -> str:
+def create_access_token(user_id: uuid.UUID, *, scope: str) -> str:
+    """`scope` is the user's role name (superAdmin/admin/users) at the moment
+    the token was issued — it rides in the token so downstream checks (and the
+    X-Scope response header) don't need a DB hit to know it.
+    """
     return _create_token(
-        str(user_id), TokenType.ACCESS, timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        str(user_id),
+        TokenType.ACCESS,
+        timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        extra_claims={"scope": scope},
     )
 
 

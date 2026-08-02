@@ -6,10 +6,11 @@ admin) and the WS router are included here as each module lands, phase by phase.
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
 from app.modules.channels.router import router as channels_router
 from app.modules.files.router import router as files_router
@@ -47,7 +48,30 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Browsers hide non-"safe" response headers from JS on cross-origin
+    # requests unless the server explicitly opts in — without this, the
+    # mobile web client's axios calls would see these headers as absent even
+    # though they're actually on the wire.
+    expose_headers=["X-App-Id", "X-User-Id", "X-Scope"],
 )
+
+
+@app.middleware("http")
+async def add_identity_headers(request: Request, call_next):
+    """X-App-Id on every response; X-User-Id/X-Scope on authenticated ones —
+    get_current_user (modules/auth/dependencies.py) sets request.state during
+    routing, which is what this reads once the handler has run.
+    """
+    response = await call_next(request)
+    response.headers["X-App-Id"] = settings.APP_ID
+    user_id = getattr(request.state, "user_id", None)
+    if user_id:
+        response.headers["X-User-Id"] = user_id
+    scope = getattr(request.state, "scope", None)
+    if scope:
+        response.headers["X-Scope"] = scope
+    return response
+
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -56,6 +80,7 @@ app.include_router(messages_router)
 app.include_router(files_router)
 app.include_router(search_router)
 app.include_router(notifications_router)
+app.include_router(admin_router)
 app.include_router(ws_router)
 
 

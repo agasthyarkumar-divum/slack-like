@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useNavigation, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 
 import { EmptyState } from "@/components/EmptyState";
@@ -27,11 +27,14 @@ function timeLabel(iso: string | null): string {
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const navigation = useNavigation();
   const { subscribe } = useWS();
   const { unreadCount, refresh: refreshUnreadCount } = useNotifications();
   const [items, setItems] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const unreadCountRef = useRef(unreadCount);
+  unreadCountRef.current = unreadCount;
 
   const load = useCallback(async () => {
     const data = await listNotifications();
@@ -43,6 +46,23 @@ export default function NotificationsScreen() {
   }, [load]);
 
   useEffect(() => subscribe("notification.new", () => load()), [subscribe, load]);
+
+  // Tab screens stay mounted when you switch away and back — a mount-only
+  // effect only fires the very first time you visit the tab, so opening
+  // Notifications a second time (after a new one arrived) wouldn't clear the
+  // badge. A navigation focus listener fires on every visit, mount or not.
+  useEffect(() => {
+    const unsubscribeFocus = navigation.addListener("focus", async () => {
+      await load();
+      if (unreadCountRef.current > 0) {
+        await markAllRead();
+        setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
+        await refreshUnreadCount();
+      }
+    });
+    return unsubscribeFocus;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, load]);
 
   async function handleRefresh() {
     setIsRefreshing(true);

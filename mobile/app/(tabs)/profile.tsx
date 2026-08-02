@@ -10,7 +10,7 @@ import { useTheme } from "@/lib/theme/ThemeContext";
 import { fonts, radii, spacing } from "@/lib/theme/tokens";
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
   const { colors } = useTheme();
   const router = useRouter();
 
@@ -41,11 +41,15 @@ export default function ProfileScreen() {
           <SettingsIcon size={18} color={colors.textSecondary} strokeWidth={1.5} />
           <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Settings</Text>
         </Pressable>
-        <View style={[styles.menuSeparator, { backgroundColor: colors.borderHairline }]} />
-        <Pressable style={styles.menuRow} onPress={() => router.push("/admin")}>
-          <Shield size={18} color={colors.textSecondary} strokeWidth={1.5} />
-          <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Admin Dashboard</Text>
-        </Pressable>
+        {isAdmin ? (
+          <>
+            <View style={[styles.menuSeparator, { backgroundColor: colors.borderHairline }]} />
+            <Pressable style={styles.menuRow} onPress={() => router.push("/admin")}>
+              <Shield size={18} color={colors.textSecondary} strokeWidth={1.5} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Admin Dashboard</Text>
+            </Pressable>
+          </>
+        ) : null}
       </View>
 
       <View style={styles.logout}>

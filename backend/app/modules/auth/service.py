@@ -23,6 +23,11 @@ from app.core.security import (
 from app.db.models import User
 from app.modules.auth import repository
 
+# The scope a token gets when a user has no role_id (shouldn't normally
+# happen once registration assigns one, but a token must always carry some
+# scope) — least-privileged of the three (architecture.md kickoff note).
+DEFAULT_SCOPE = "users"
+
 
 class AuthError(HTTPException):
     def __init__(self, detail: str):
@@ -34,20 +39,28 @@ async def register_user(db: AsyncSession, *, email: str, password: str, display_
         raise HTTPException(
             status.HTTP_409_CONFLICT, "An account with this email already exists."
         )
-    member_role = await repository.get_role_by_name(db, "member")
+    default_role = await repository.get_role_by_name(db, DEFAULT_SCOPE)
     user = await repository.create_user(
         db,
         email=email,
         hashed_password=hash_password(password),
         display_name=display_name,
-        role_id=member_role.id if member_role else None,
+        role_id=default_role.id if default_role else None,
     )
     await db.commit()
     return user
 
 
+async def _get_scope(db: AsyncSession, user: User) -> str:
+    if user.role_id is None:
+        return DEFAULT_SCOPE
+    role = await repository.get_role_by_id(db, user.role_id)
+    return role.name if role else DEFAULT_SCOPE
+
+
 async def _issue_tokens(db: AsyncSession, user: User) -> tuple[str, str]:
-    access_token = create_access_token(user.id)
+    scope = await _get_scope(db, user)
+    access_token = create_access_token(user.id, scope=scope)
     refresh_token = create_refresh_token(user.id)
     await repository.create_session(
         db,

@@ -44,7 +44,7 @@ async def test_register_rejects_short_password(client):
 
 
 async def test_register_assigns_member_role_when_it_exists(client, db_session):
-    role = Role(name="member")
+    role = Role(name="users")
     db_session.add(role)
     await db_session.commit()
     await db_session.refresh(role)

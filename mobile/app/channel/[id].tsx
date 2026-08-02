@@ -57,7 +57,7 @@ function MessageRow({
   item: Message;
   isMine: boolean;
   showSenderName: boolean;
-  deliveryStatus: "sent" | "seen" | undefined;
+  deliveryStatus: "sent" | "delivered" | "seen" | undefined;
 }) {
   const senderName = useUserName(showSenderName ? item.sender_id : null);
   return (
@@ -90,6 +90,7 @@ export default function ChatScreen() {
   const [isSending, setIsSending] = useState(false);
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
   const [seenUpToTimestamp, setSeenUpToTimestamp] = useState<string | null>(null);
+  const [deliveredUpToTimestamp, setDeliveredUpToTimestamp] = useState<string | null>(null);
 
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const lastTypingSentAtRef = useRef(0);
@@ -131,6 +132,17 @@ export default function ChatScreen() {
     const unsubNew = subscribe("message.new", (data) => {
       if (data.channel_id !== channelId) return;
       setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [data as unknown as Message, ...prev]));
+      if (data.sender_id && data.sender_id !== user?.id) {
+        send("message.delivered", { message_id: data.id, channel_id: channelId });
+      }
+    });
+    const unsubDelivered = subscribe("message.delivered", (data) => {
+      if (data.user_id === user?.id) return;
+      const deliveredMessage = messagesRef.current.find((m) => m.id === data.message_id);
+      const deliveredAt = deliveredMessage?.created_at;
+      if (deliveredAt) {
+        setDeliveredUpToTimestamp((prev) => (!prev || deliveredAt > prev ? deliveredAt : prev));
+      }
     });
     const unsubEdited = subscribe("message.edited", (data) => {
       if (data.channel_id !== channelId) return;
@@ -182,6 +194,7 @@ export default function ChatScreen() {
 
     return () => {
       unsubNew();
+      unsubDelivered();
       unsubEdited();
       unsubDeleted();
       unsubTypingStart();
@@ -265,8 +278,17 @@ export default function ChatScreen() {
         renderItem={({ item }) => {
           const isMine = item.sender_id === user?.id;
           const isSeen = Boolean(seenUpToTimestamp && item.created_at && item.created_at <= seenUpToTimestamp);
+          const isDelivered = Boolean(
+            deliveredUpToTimestamp && item.created_at && item.created_at <= deliveredUpToTimestamp
+          );
           const deliveryStatus =
-            isMine && item.id === latestMineMessageId ? (isSeen ? "seen" : "sent") : undefined;
+            isMine && item.id === latestMineMessageId
+              ? isSeen
+                ? "seen"
+                : isDelivered
+                  ? "delivered"
+                  : "sent"
+              : undefined;
           return (
             <MessageRow
               item={item}

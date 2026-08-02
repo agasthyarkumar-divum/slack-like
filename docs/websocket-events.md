@@ -33,6 +33,7 @@ All events on the wire share this envelope:
 | `typing.start` | client → server → broadcast | Client started typing in a channel |
 | `typing.stop` | client → server → broadcast | Client stopped typing (or composer cleared/blurred) |
 | `presence.update` | server → client | A user's online/away/offline status or `last_seen` changed |
+| `message.delivered` | client → server → broadcast | Client's socket received `message.new` for a message that isn't its own — ephemeral (no DB row), unlike `read_receipt.update` |
 | `read_receipt.update` | client → server → broadcast | Client marked a message read |
 | `notification.new` | server → client | A new notification was created for this user (mention, DM, reaction) |
 | `file.ready` | server → client | An uploaded attachment finished async processing (encrypt/compress/thumbnail) and is downloadable |
@@ -126,6 +127,33 @@ dropped (e.g. app backgrounded).
 ```
 
 `status` is one of `online` / `away` / `offline`.
+
+### `message.delivered`
+
+Client → server, sent as soon as the client's socket receives `message.new`
+for a message it didn't send itself:
+
+```json
+{
+  "event": "message.delivered",
+  "data": { "message_id": "b3f1c2b0-...-uuid", "channel_id": "a1e4...-uuid" }
+}
+```
+
+Server rebroadcasts to other channel members (so the sender's client can move
+that message from "sent" to "delivered"):
+
+```json
+{
+  "event": "message.delivered",
+  "data": { "message_id": "b3f1c2b0-...-uuid", "user_id": "9c2d...-uuid" }
+}
+```
+
+Unlike `read_receipt.update`, this is never persisted — a dropped or
+out-of-order delivery ack just means the sender's UI stays one state behind
+until the next one arrives, which is an acceptable, self-correcting gap for a
+purely cosmetic status.
 
 ### `read_receipt.update`
 
